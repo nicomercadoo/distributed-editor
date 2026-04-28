@@ -16,7 +16,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&host, "host", "0.0.0.0", "Host de escucha")
+	rootCmd.PersistentFlags().StringVar(&host, "host", "localhost", "Host de escucha")
 	rootCmd.PersistentFlags().IntVar(&port, "port", 8080, "Puerto de escucha")
 	rootCmd.PersistentFlags().StringVar(&wsPath, "ws-path", "/ws", "Path del endpoint WebSocket")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "Nivel de logging")

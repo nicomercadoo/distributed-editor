@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"proyecto-final-redes/internal/config"
+	// "proyecto-final-redes/internal/config"
 
 	"github.com/spf13/cobra"
 )

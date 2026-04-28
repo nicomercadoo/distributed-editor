@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+
+	"proyecto-final-redes/internal/server"
 
 	"github.com/spf13/cobra"
 )
@@ -11,9 +15,17 @@ func newStartCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Inicia el servidor",
 		Long:  "Arranca el servidor WebSocket de edicion colaborativa.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("start host=%s port=%d ws-path=%s log-level=%s\n", host, port, wsPath, logLevel)
-			return nil
+		Run: func(cmd *cobra.Command, args []string) {
+			go server.GlobalHub.Run()
+
+			http.HandleFunc(wsPath, server.HandleConnection)
+
+			addr := fmt.Sprintf("%s:%d", host, port)
+			fmt.Printf("Servidor de documento único escuchando en %s%s...\n", addr, wsPath)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				fmt.Fprintf(os.Stderr, "Error iniciando servidor: %v\n", err)
+				os.Exit(1)
+			}
 		},
 	}
 }
