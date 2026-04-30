@@ -45,6 +45,7 @@ func (h *Hub) Run() {
 
       // Reenviamos a todos los conectados
       for client := range h.clients {
+          if 
         select {
         case client.send <- op:
         default:

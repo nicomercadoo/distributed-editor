@@ -1,34 +1,37 @@
 package server
 
 import (
-  "log"
-  "net/http"
-  "github.com/gorilla/websocket"
+	"log"
+	"net/http"
 	"proyecto-final-redes/internal/protocol"
+
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-  CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 // Instancia global del único documento
-var GlobalHub = NewHub()
+// var GlobalHub = NewHub()
 
-func HandleConnection(w http.ResponseWriter, r *http.Request) {
-  conn, err := upgrader.Upgrade(w, r, nil)
-  if err != nil {
-    log.Println("Error upgrade:", err)
-    return
-  }
+func HandleConnection(hub *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Println("Error upgrade:", err)
+			return
+		}
 
-  client := &Client{
-    hub:  GlobalHub,
-    conn: conn,
-    send: make(chan protocol.OperationMessage, 256),
-  }
+		client := &Client{
+			hub:  hub, // Usamos el hub inyectado
+			conn: conn,
+			send: make(chan protocol.OperationMessage, 256),
+		}
 
-  client.hub.Register <- client
+		client.hub.Register <- client
 
-  go client.WritePump()
-  go client.ReadPump()
+		go client.WritePump()
+		go client.ReadPump()
+	}
 }
