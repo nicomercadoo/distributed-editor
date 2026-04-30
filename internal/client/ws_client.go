@@ -3,17 +3,19 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
-	"strings"
-	"github.com/gorilla/websocket"
 	"proyecto-final-redes/internal/protocol"
+	"strings"
+
+	"github.com/gorilla/websocket"
 )
 
 func StartSession(url string) {
 	// 1. Conectarse al servidor
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		panic(fmt.Sprintf("Error conectando al servidor: %v", err))
+		log.Fatalf("Error conectando al servidor: %v", err)
 	}
 	defer conn.Close()
 	fmt.Println("Conectado al servidor. Escribí 'insert' o 'delete' (o 'salir'):")
