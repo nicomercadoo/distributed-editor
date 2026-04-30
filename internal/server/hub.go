@@ -2,19 +2,22 @@ package server
 
 import "proyecto-final-redes/internal/protocol"
 
-type Hub struct {
-  clients    map[*Client]bool
-  Broadcast  chan protocol.OperationMessage
-  Register   chan *Client
-  Unregister chan *Client
+type broadcastMsg struct {
+  client *Client
+  op     protocol.OperationMessage
+}
 
-  // El documento en memoria: una secuencia de operaciones (log)
+type Hub struct {
+  clients     map[*Client]bool
+  Broadcast   chan broadcastMsg
+  Register    chan *Client
+  Unregister  chan *Client
   DocumentLog []protocol.OperationMessage
 }
 
 func NewHub() *Hub {
   return &Hub{
-    Broadcast:   make(chan protocol.OperationMessage),
+    Broadcast:   make(chan broadcastMsg),
     Register:    make(chan *Client),
     Unregister:  make(chan *Client),
     clients:     make(map[*Client]bool),
@@ -27,8 +30,6 @@ func (h *Hub) Run() {
     select {
     case client := <-h.Register:
       h.clients[client] = true
-
-      // Al conectarse, el cliente obtiene la última versión
       for _, op := range h.DocumentLog {
         client.send <- op
       }
@@ -39,15 +40,16 @@ func (h *Hub) Run() {
         close(client.send)
       }
 
-    case op := <-h.Broadcast:
-      // Guardamos la operación en el log general
-      h.DocumentLog = append(h.DocumentLog, op)
+    case bMsg := <-h.Broadcast:
+      h.DocumentLog = append(h.DocumentLog, bMsg.op)
 
-      // Reenviamos a todos los conectados
       for client := range h.clients {
-          if 
+        if client == bMsg.client {
+          continue
+        }
+
         select {
-        case client.send <- op:
+        case client.send <- bMsg.op:
         default:
           close(client.send)
           delete(h.clients, client)

@@ -29,7 +29,7 @@ func StartSession(url string) {
 				fmt.Println("\nConexión cerrada por el servidor.")
 				os.Exit(0)
 			}
-			fmt.Printf("\n[SERVIDOR DICE]: Operación %s en posición %d\n> ", op.Op, op.Position)
+			fmt.Printf("\n[SERVIDOR DICE]: Operación %s en posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
 		}
 	}()
 

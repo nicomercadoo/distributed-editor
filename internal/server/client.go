@@ -27,7 +27,11 @@ func (c *Client) ReadPump() {
 			}
 			break
 		}
-		c.hub.Broadcast <- op
+
+		c.hub.Broadcast <- broadcastMsg{
+			client: c,
+			op:     op,
+		}
 	}
 }
 
