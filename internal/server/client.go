@@ -9,7 +9,7 @@ import (
 type Client struct {
   hub  *Hub
   conn *websocket.Conn
-  send chan protocol.Operation 
+  send chan protocol.OperationMessage
 }
 
 func (c *Client) ReadPump() {
@@ -18,7 +18,7 @@ func (c *Client) ReadPump() {
     c.conn.Close()
   }()
   for {
-    var op protocol.Operation
+    var op protocol.OperationMessage
     err := c.conn.ReadJSON(&op)
     if err != nil {
       if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {

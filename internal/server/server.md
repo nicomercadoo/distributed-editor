@@ -12,7 +12,7 @@ Este archivo expone la interfaz HTTP. Su única responsabilidad es inicializar l
 
 ### 2. `internal/server/client.go` (La Interfaz de Red)
 El cliente actúa como un adaptador entre el socket TCP de red subyacente y el Hub en memoria. Se divide en dos bucles infinitos que corren en hilos separados:
-* **`ReadPump`:** Su hilo se bloquea esperando datos desde la red mediante `conn.ReadJSON()`. Apenas recibe y deserializa un JSON válido en una estructura `protocol.Operation`, lo inyecta en el canal `Broadcast` del Hub. Si la red falla o el usuario cierra la conexión, rompe el bucle y envía su propia referencia al canal `Unregister` del Hub.
+* **`ReadPump`:** Su hilo se bloquea esperando datos desde la red mediante `conn.ReadJSON()`. Apenas recibe y deserializa un JSON válido en una estructura `protocol.OperationMessage`, lo inyecta en el canal `Broadcast` del Hub. Si la red falla o el usuario cierra la conexión, rompe el bucle y envía su propia referencia al canal `Unregister` del Hub.
 * **`WritePump`:** Su hilo se bloquea esperando datos desde la memoria, específicamente desde su canal interno `c.send`. Cuando el Hub deposita una operación en este canal, el bucle despierta, serializa la estructura a JSON y la escribe en el socket mediante `conn.WriteJSON()`.
 
 ### 3. `internal/server/hub.go` (El Gestor de Estado)

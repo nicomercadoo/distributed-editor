@@ -24,7 +24,7 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
   client := &Client{
     hub:  GlobalHub,
     conn: conn,
-    send: make(chan protocol.Operation, 256),
+    send: make(chan protocol.OperationMessage, 256),
   }
 
   client.hub.Register <- client

@@ -23,7 +23,7 @@ func StartSession(url string) {
 	// 2. Goroutine para LEER mensajes del servidor en segundo plano
 	go func() {
 		for {
-			var op protocol.Operation
+			var op protocol.OperationMessage
 			err := conn.ReadJSON(&op)
 			if err != nil {
 				fmt.Println("\nConexión cerrada por el servidor.")
@@ -47,10 +47,10 @@ func StartSession(url string) {
 		}
 
 		// Armamos un comando hardcodeado solo para probar la red
-		op := protocol.Operation{
-			Type: "insert",
-			Char: strings.TrimSpace(texto),
-			Pos:  0,
+		op := protocol.OperationMessage {
+			Op:       protocol.Insert,
+			Position: 0,
+			Content:  strings.TrimSpace(texto),
 		}
 
 		// Enviamos el struct como JSON
