@@ -1,12 +1,12 @@
-package document
-
+package client
 import "proyecto-final-redes/internal/protocol/operation"
+import "proyecto-final-redes/internal/protocol/document"
 
 type DocumentLocalState struct {
-	LastSyncRevision ID                    `json:"last_sync_version"`
-	PendingChanges  []operation.Operation `json:"pending_changes"`
-	SentChanges     []operation.Operation `json:"sent_changes"`
-	Document        DocumentRep           `json:"document"`
+	LastSyncRevision document.ID
+	PendingChanges  []operation.Operation 
+	SentChanges     []operation.Operation 
+	Document        document.DocumentRep  
 }
 
 func NewDocumentLocalState() *DocumentLocalState {

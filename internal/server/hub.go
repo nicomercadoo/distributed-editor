@@ -2,7 +2,6 @@ package server
 
 import (
 	"proyecto-final-redes/internal/protocol/ack"
-	"proyecto-final-redes/internal/protocol/document"
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 )
@@ -17,7 +16,7 @@ type Hub struct {
 	Broadcast     chan broadcastMsg
 	Register      chan *Client
 	Unregister    chan *Client
-	DocumentState *document.DocumentServerState
+	DocumentState *DocumentServerState
 }
 
 func NewHub() *Hub {
@@ -26,7 +25,7 @@ func NewHub() *Hub {
 		Register:      make(chan *Client),
 		Unregister:    make(chan *Client),
 		clients:       make(map[*Client]bool),
-		DocumentState: document.NewDocumentServerState(),
+		DocumentState: NewDocumentServerState(),
 	}
 }
 
@@ -50,10 +49,14 @@ func (h *Hub) Run() {
 			}
 
 		case bMsg := <-h.Broadcast:
+		    // Entiendo que esto deberia hacerse cuando se haga la respectiva OT de un Change en PendingChanges,
+			// y la revicion del ack se recupera de ahí.
+			// Y que el broadcast deberia ser despues de eso.
+			// (para lo cual habría qe agreagar un campo Revision al broadcastMsg o cambiar directamente toda la estructura.)
+			// Ahora funciona como antes.
 			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, bMsg.op)
-			h.DocumentState.Revision++
 
-			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: h.DocumentState.Revision})
+			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: 0})
 			if err == nil {
 				select {
 				case bMsg.client.send <- ackMsg:
