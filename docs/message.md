@@ -6,8 +6,11 @@ soportar multiples tipos de mensajes por el mismo WebSocket.
 ## Cambios principales
 
 - Se introdujo `Message` como wrapper con `type` y `payload` JSON.
-- Se agrego `AckMessage` con el campo `revision`.
+- Se agrego `Ack` con el campo `revision`.
 - Cliente y servidor ahora envian y reciben `Message` en ambos sentidos.
+- Se movio `Message` a `internal/protocol/message/`.
+- `Operation` ahora vive en `internal/protocol/operation/`.
+- `Ack` ahora vive en `internal/protocol/ack/`.
 
 ## Formato de mensaje
 
@@ -39,7 +42,10 @@ soportar multiples tipos de mensajes por el mismo WebSocket.
 
 ## Archivos afectados
 
-- `internal/protocol/messages.go`
+- `internal/protocol/message/message.go`
+- `internal/protocol/operation/operation.go`
+- `internal/protocol/operation/operation_type.go`
+- `internal/protocol/ack/ack.go`
 - `internal/server/client.go`
 - `internal/server/hub.go`
 - `internal/server/socket.go`

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"proyecto-final-redes/internal/protocol"
+	"proyecto-final-redes/internal/protocol/message"
+	"proyecto-final-redes/internal/protocol/operation"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -23,7 +24,7 @@ func StartSession(url string) {
 	// 2. Goroutine para LEER mensajes del servidor en segundo plano
 	go func() {
 		for {
-			var msg protocol.Message
+			var msg message.Message
 			err := conn.ReadJSON(&msg)
 			if err != nil {
 				fmt.Println("\nConexión cerrada por el servidor.")
@@ -31,7 +32,7 @@ func StartSession(url string) {
 			}
 
 			switch msg.Type {
-			case protocol.MessageTypeOperation:
+			case message.MessageTypeOperation:
 				op, err := msg.DecodeOperation()
 				if err != nil {
 					fmt.Print("\n[SERVER]: Operacion invalida\n> ")
@@ -39,13 +40,13 @@ func StartSession(url string) {
 				}
 				fmt.Printf("\n[SERVER]: Operación %s en posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
 
-			case protocol.MessageTypeAck:
-				ack, err := msg.DecodeAck()
+			case message.MessageTypeAck:
+				ackMsg, err := msg.DecodeAck()
 				if err != nil {
 					fmt.Print("\n[SERVER]: Ack invalido\n> ")
 					continue
 				}
-				fmt.Printf("\n[SERVER]: Ack revision %d\n> ", ack.Revision)
+				fmt.Printf("\n[SERVER]: Ack revision %d\n> ", ackMsg.Revision)
 
 			default:
 				fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n> ")
@@ -67,13 +68,13 @@ func StartSession(url string) {
 		}
 
 		// Armamos un comando hardcodeado solo para probar la red
-		op := protocol.OperationMessage{
-			Op:       protocol.Insert,
+		op := operation.Operation{
+			Op:       operation.Insert,
 			Position: 0,
 			Content:  strings.TrimSpace(texto),
 		}
 
-		msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
+		msg, err := message.NewMessage(message.MessageTypeOperation, op)
 		if err != nil {
 			fmt.Println("Error al serializar:", err)
 			break

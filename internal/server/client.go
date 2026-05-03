@@ -2,7 +2,7 @@ package server
 
 import (
 	"log"
-	"proyecto-final-redes/internal/protocol"
+	"proyecto-final-redes/internal/protocol/message"
 
 	"github.com/gorilla/websocket"
 )
@@ -10,7 +10,7 @@ import (
 type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
-	send chan protocol.Message
+	send chan message.Message
 }
 
 func (c *Client) ReadPump() {
@@ -19,7 +19,7 @@ func (c *Client) ReadPump() {
 		c.conn.Close()
 	}()
 	for {
-		var msg protocol.Message
+		var msg message.Message
 		err := c.conn.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -28,7 +28,7 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		if msg.Type != protocol.MessageTypeOperation {
+		if msg.Type != message.MessageTypeOperation {
 			continue
 		}
 

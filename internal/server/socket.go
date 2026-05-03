@@ -3,7 +3,7 @@ package server
 import (
 	"log"
 	"net/http"
-	"proyecto-final-redes/internal/protocol"
+	"proyecto-final-redes/internal/protocol/message"
 
 	"github.com/gorilla/websocket"
 )
@@ -26,7 +26,7 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 		client := &Client{
 			hub:  hub, // Usamos el hub inyectado
 			conn: conn,
-			send: make(chan protocol.Message, 256),
+			send: make(chan message.Message, 256),
 		}
 
 		client.hub.Register <- client

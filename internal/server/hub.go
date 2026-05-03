@@ -1,10 +1,15 @@
 package server
 
-import "proyecto-final-redes/internal/protocol"
+import (
+	"proyecto-final-redes/internal/protocol/ack"
+	"proyecto-final-redes/internal/protocol/document"
+	"proyecto-final-redes/internal/protocol/message"
+	"proyecto-final-redes/internal/protocol/operation"
+)
 
 type broadcastMsg struct {
 	client *Client
-	op     protocol.OperationMessage
+	op     operation.Operation
 }
 
 type Hub struct {
@@ -12,16 +17,16 @@ type Hub struct {
 	Broadcast     chan broadcastMsg
 	Register      chan *Client
 	Unregister    chan *Client
-	DocumentState *protocol.DocumentServerState
+	DocumentState *document.DocumentServerState
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Broadcast:  make(chan broadcastMsg),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
-		DocumentState: protocol.NewDocumentServerState(),
+		Broadcast:     make(chan broadcastMsg),
+		Register:      make(chan *Client),
+		Unregister:    make(chan *Client),
+		clients:       make(map[*Client]bool),
+		DocumentState: document.NewDocumentServerState(),
 	}
 }
 
@@ -31,7 +36,7 @@ func (h *Hub) Run() {
 		case client := <-h.Register:
 			h.clients[client] = true
 			for _, op := range h.DocumentState.RevisionLog {
-				msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
+				msg, err := message.NewMessage(message.MessageTypeOperation, op)
 				if err != nil {
 					continue
 				}
@@ -48,15 +53,15 @@ func (h *Hub) Run() {
 			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, bMsg.op)
 			h.DocumentState.Revision++
 
-			ack, err := protocol.NewMessage(protocol.MessageTypeAck, protocol.AckMessage{Revision: h.DocumentState.Revision})
+			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: h.DocumentState.Revision})
 			if err == nil {
 				select {
-				case bMsg.client.send <- ack:
+				case bMsg.client.send <- ackMsg:
 				default:
 				}
 			}
 
-			op, err := protocol.NewMessage(protocol.MessageTypeOperation, bMsg.op)
+			op, err := message.NewMessage(message.MessageTypeOperation, bMsg.op)
 			for client := range h.clients {
 				if client == bMsg.client {
 					continue
@@ -72,11 +77,3 @@ func (h *Hub) Run() {
 		}
 	}
 }
-
-// func mustOperationMessage(op protocol.OperationMessage) protocol.Message {
-// 	msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
-// 	if err != nil {
-// 		return protocol.Message{Type: protocol.MessageTypeOperation, Payload: []byte("null")}
-// 	}
-// 	return msg
-// }
