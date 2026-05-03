@@ -23,13 +23,33 @@ func StartSession(url string) {
 	// 2. Goroutine para LEER mensajes del servidor en segundo plano
 	go func() {
 		for {
-			var op protocol.OperationMessage
-			err := conn.ReadJSON(&op)
+			var msg protocol.Message
+			err := conn.ReadJSON(&msg)
 			if err != nil {
 				fmt.Println("\nConexión cerrada por el servidor.")
 				os.Exit(0)
 			}
-			fmt.Printf("\n[SERVIDOR DICE]: Operación %s en posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
+
+			switch msg.Type {
+			case protocol.MessageTypeOperation:
+				op, err := msg.DecodeOperation()
+				if err != nil {
+					fmt.Print("\n[SERVER]: Operacion invalida\n> ")
+					continue
+				}
+				fmt.Printf("\n[SERVER]: Operación %s en posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
+
+			case protocol.MessageTypeAck:
+				ack, err := msg.DecodeAck()
+				if err != nil {
+					fmt.Print("\n[SERVER]: Ack invalido\n> ")
+					continue
+				}
+				fmt.Printf("\n[SERVER]: Ack revision %d\n> ", ack.Revision)
+
+			default:
+				fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n> ")
+			}
 		}
 	}()
 
@@ -47,14 +67,20 @@ func StartSession(url string) {
 		}
 
 		// Armamos un comando hardcodeado solo para probar la red
-		op := protocol.OperationMessage {
+		op := protocol.OperationMessage{
 			Op:       protocol.Insert,
 			Position: 0,
 			Content:  strings.TrimSpace(texto),
 		}
 
+		msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
+		if err != nil {
+			fmt.Println("Error al serializar:", err)
+			break
+		}
+
 		// Enviamos el struct como JSON
-		err = conn.WriteJSON(op)
+		err = conn.WriteJSON(msg)
 		if err != nil {
 			fmt.Println("Error al enviar:", err)
 			break

@@ -3,58 +3,80 @@ package server
 import "proyecto-final-redes/internal/protocol"
 
 type broadcastMsg struct {
-  client *Client
-  op     protocol.OperationMessage
+	client *Client
+	op     protocol.OperationMessage
 }
 
 type Hub struct {
-  clients     map[*Client]bool
-  Broadcast   chan broadcastMsg
-  Register    chan *Client
-  Unregister  chan *Client
-  DocumentLog []protocol.OperationMessage
+	clients       map[*Client]bool
+	Broadcast     chan broadcastMsg
+	Register      chan *Client
+	Unregister    chan *Client
+	DocumentState *protocol.DocumentServerState
 }
 
 func NewHub() *Hub {
-  return &Hub{
-    Broadcast:   make(chan broadcastMsg),
-    Register:    make(chan *Client),
-    Unregister:  make(chan *Client),
-    clients:     make(map[*Client]bool),
-    DocumentLog: make([]protocol.OperationMessage, 0),
-  }
+	return &Hub{
+		Broadcast:  make(chan broadcastMsg),
+		Register:   make(chan *Client),
+		Unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+		DocumentState: protocol.NewDocumentServerState(),
+	}
 }
 
 func (h *Hub) Run() {
-  for {
-    select {
-    case client := <-h.Register:
-      h.clients[client] = true
-      for _, op := range h.DocumentLog {
-        client.send <- op
-      }
+	for {
+		select {
+		case client := <-h.Register:
+			h.clients[client] = true
+			for _, op := range h.DocumentState.RevisionLog {
+				msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
+				if err != nil {
+					continue
+				}
+				client.send <- msg
+			}
 
-    case client := <-h.Unregister:
-      if _, ok := h.clients[client]; ok {
-        delete(h.clients, client)
-        close(client.send)
-      }
+		case client := <-h.Unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
 
-    case bMsg := <-h.Broadcast:
-      h.DocumentLog = append(h.DocumentLog, bMsg.op)
+		case bMsg := <-h.Broadcast:
+			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, bMsg.op)
+			h.DocumentState.Revision++
 
-      for client := range h.clients {
-        if client == bMsg.client {
-          continue
-        }
+			ack, err := protocol.NewMessage(protocol.MessageTypeAck, protocol.AckMessage{Revision: h.DocumentState.Revision})
+			if err == nil {
+				select {
+				case bMsg.client.send <- ack:
+				default:
+				}
+			}
 
-        select {
-        case client.send <- bMsg.op:
-        default:
-          close(client.send)
-          delete(h.clients, client)
-        }
-      }
-    }
-  }
+			op, err := protocol.NewMessage(protocol.MessageTypeOperation, bMsg.op)
+			for client := range h.clients {
+				if client == bMsg.client {
+					continue
+				}
+
+				select {
+				case client.send <- op:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
 }
+
+// func mustOperationMessage(op protocol.OperationMessage) protocol.Message {
+// 	msg, err := protocol.NewMessage(protocol.MessageTypeOperation, op)
+// 	if err != nil {
+// 		return protocol.Message{Type: protocol.MessageTypeOperation, Payload: []byte("null")}
+// 	}
+// 	return msg
+// }

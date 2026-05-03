@@ -10,7 +10,7 @@ import (
 type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
-	send chan protocol.OperationMessage
+	send chan protocol.Message
 }
 
 func (c *Client) ReadPump() {
@@ -19,8 +19,8 @@ func (c *Client) ReadPump() {
 		c.conn.Close()
 	}()
 	for {
-		var op protocol.OperationMessage
-		err := c.conn.ReadJSON(&op)
+		var msg protocol.Message
+		err := c.conn.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Error de lectura: %v", err)
@@ -28,10 +28,17 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		c.hub.Broadcast <- broadcastMsg{
-			client: c,
-			op:     op,
+		if msg.Type != protocol.MessageTypeOperation {
+			continue
 		}
+
+		op, err := msg.DecodeOperation()
+		if err != nil {
+			log.Printf("Error decodificando operacion: %v", err)
+			continue
+		}
+
+		c.hub.Broadcast <- broadcastMsg{client: c, op: op}
 	}
 }
 
@@ -40,13 +47,13 @@ func (c *Client) WritePump() {
 		c.conn.Close()
 	}()
 	for {
-		op, ok := <-c.send
+		msg, ok := <-c.send
 		if !ok {
 			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 			return
 		}
 
-		err := c.conn.WriteJSON(op)
+		err := c.conn.WriteJSON(msg)
 		if err != nil {
 			return
 		}

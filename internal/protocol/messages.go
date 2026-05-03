@@ -1,58 +1,50 @@
 package protocol
 
-type Operation int
+import "encoding/json"
 
 const (
-	Insert Operation = iota
-	Delete
+	MessageTypeOperation = "operation"
+	MessageTypeAck       = "ack"
 )
 
-var operationToString = map[Operation]string{
-	Insert: "I",
-	Delete: "D",
+// Message envuelve distintos tipos de mensajes en el mismo WebSocket.
+type Message struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
 }
 
-var stringToOperation = func() map[string]Operation {
-	m := make(map[string]Operation, len(operationToString))
-	for k, v := range operationToString {
-		m[v] = k
-	}
-	return m
-}()
-
-func (o Operation) String() string {
-	if s, ok := operationToString[o]; ok {
-		return s
-	}
-	return "unknown"
-}
-
-func ParseOperation(s string) (Operation, bool) {
-	if v, ok := stringToOperation[s]; ok {
-		return v, true
-	}
-	return 0, false
-}
-
-func (o Operation) MarshalText() ([]byte, error) {
-	return []byte(o.String()), nil
-}
-
-func (o *Operation) UnmarshalText(text []byte) error {
-	if v, ok := ParseOperation(string(text)); ok {
-		*o = v
-		return nil
-	}
-	// default to Insert for backwards-compat; callers can validate separately
-	*o = Insert
-	return nil
-}
-
-// OperationMessage representa los comandos insert(c,p) y delete(p)
+// OperationMessage representa los comandos insert(c,p) y delete(p).
 type OperationMessage struct {
-    Op       Operation `json:"op"`
-    Position int       `json:"pos"`
-    Content  string    `json:"content,omitempty"` // solo para insert
+	Op       Operation `json:"op"`
+	Position int       `json:"pos"`
+	Content  string    `json:"content,omitempty"` // solo para insert
 }
 
-// { "op": "I", "pos": 5, "content": "a" }
+// AckMessage confirma procesamiento con revision actual.
+type AckMessage struct {
+	Revision int `json:"revision"`
+}
+
+func NewMessage(messageType string, payload any) (Message, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return Message{
+		Type:    messageType,
+		Payload: data,
+	}, nil
+}
+
+func (m Message) DecodeOperation() (OperationMessage, error) {
+	var op OperationMessage
+	err := json.Unmarshal(m.Payload, &op)
+	return op, err
+}
+
+func (m Message) DecodeAck() (AckMessage, error) {
+	var ack AckMessage
+	err := json.Unmarshal(m.Payload, &ack)
+	return ack, err
+}
