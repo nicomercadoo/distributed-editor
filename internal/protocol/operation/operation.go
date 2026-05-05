@@ -5,4 +5,5 @@ type Operation struct {
 	Op       OperationType `json:"op"`
 	Position int           `json:"pos"`
 	Content  string        `json:"content,omitempty"` // solo para insert
+	Revision int           `json:"revision"`
 }

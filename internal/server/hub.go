@@ -49,14 +49,46 @@ func (h *Hub) Run() {
 			}
 
 		case bMsg := <-h.Broadcast:
-		    // Entiendo que esto deberia hacerse cuando se haga la respectiva OT de un Change en PendingChanges,
-			// y la revicion del ack se recupera de ahí.
-			// Y que el broadcast deberia ser despues de eso.
-			// (para lo cual habría qe agreagar un campo Revision al broadcastMsg o cambiar directamente toda la estructura.)
-			// Ahora funciona como antes.
-			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, bMsg.op)
+			op := bMsg.op
+			clientRevision := op.Revision
 
-			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: 0})
+			// 1. ALGORITMO DE CONTROL DE TRANSFORMACIÓN
+			// Comparamos la revisión del cliente con la longitud actual del log del servidor.
+			// Si el cliente está desactualizado, transformamos su operación contra la historia reciente.
+			isValid := true
+			for i := clientRevision; i < len(h.DocumentState.RevisionLog); i++ {
+				appliedOp := h.DocumentState.RevisionLog[i]
+
+				// Llamamos a la Función de Transformación que creaste en el paquete protocol
+				op, isValid = operation.Transform(op, appliedOp)
+
+				// Si la operación se anula (ej. intentar borrar un carácter ya borrado), cortamos el bucle.
+				if !isValid {
+					break
+				}
+			}
+
+			// Si la operación quedó invalidada (No-Op), solo le enviamos el Ack al cliente
+			// para que actualice su revisión, pero no la guardamos ni hacemos broadcast.
+			if !isValid {
+				ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: len(h.DocumentState.RevisionLog)})
+				if err == nil {
+					select {
+					case bMsg.client.send <- ackMsg:
+					default:
+					}
+				}
+				continue // Pasamos a escuchar el siguiente mensaje
+			}
+
+			// 2. APLICAR Y GUARDAR
+			// La operación superó las transformaciones. La guardamos como la verdad absoluta.
+			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, op)
+			newRevision := len(h.DocumentState.RevisionLog)
+
+			// 3. CONFIRMAR AL AUTOR (ACK)
+			// Le avisamos al cliente que su operación fue aceptada y le damos el nuevo número de revisión.
+			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: newRevision})
 			if err == nil {
 				select {
 				case bMsg.client.send <- ackMsg:
@@ -64,17 +96,21 @@ func (h *Hub) Run() {
 				}
 			}
 
-			op, err := message.NewMessage(message.MessageTypeOperation, bMsg.op)
-			for client := range h.clients {
-				if client == bMsg.client {
-					continue
-				}
+			// 4. BROADCAST A LOS DEMÁS
+			// IMPORTANTE: Enviamos la operación TRANSFORMADA, no la original.
+			outMsg, err := message.NewMessage(message.MessageTypeOperation, op)
+			if err == nil {
+				for client := range h.clients {
+					if client == bMsg.client {
+						continue // No le enviamos la operación al autor
+					}
 
-				select {
-				case client.send <- op:
-				default:
-					close(client.send)
-					delete(h.clients, client)
+					select {
+					case client.send <- outMsg:
+					default:
+						close(client.send)
+						delete(h.clients, client)
+					}
 				}
 			}
 		}
