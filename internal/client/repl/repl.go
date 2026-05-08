@@ -103,6 +103,13 @@ func (r *REPL) Run() error {
 	}
 }
 
+func (r *REPL) NotificationServer(message string) {
+    for msg := range r.notifications {
+        r.rl.Write([]byte("\n[!] " + msg + "\n"))
+        r.rl.Refresh()
+    }
+}
+
 func (r *REPL) registerHandlers() {
 	r.handlers["help"] = func(_ *State, _ Command) error {
 		printHelp()
@@ -130,7 +137,7 @@ func (r *REPL) registerHandlers() {
 		s.SetConnection(conn)
 		done := make(chan struct{})
 		s.SetListenerDone(done)
-		go listenServer(s)
+		r.listenServer()
 		fmt.Println("conectado")
 		r.updatePromptStatus("\033[32m[Conectado]\033[0m")
 		return nil
@@ -280,82 +287,84 @@ func enqueueAndSend(s *State, op operation.Operation) error {
 }
 
 func (r *REPL) listenServer() {
-    state := r.state
-	for {
-		select {
-		case <-state.ListenerDone():
-			return
-		default:
-		}
+    go func(){
+        state := r.state
+    	for {
+    		select {
+    		case <-state.ListenerDone():
+    			return
+    		default:
+    		}
 
-		var msg message.Message
-		if err := state.conn.ReadJSON(&msg); err != nil {
-			fmt.Println("\nConexión cerrada por el servidor.")
-			return
-		}
+    		var msg message.Message
+    		if err := state.conn.ReadJSON(&msg); err != nil {
+    			fmt.Println("\nConexión cerrada por el servidor.")
+    			return
+    		}
 
-		switch msg.Type {
-		case message.MessageTypeOperation:
-			op, err := msg.DecodeOperation()
-			if err != nil {
-				fmt.Print("\n[SERVER]: Operacion invalida\n")
-				continue
-			}
+    		switch msg.Type {
+    		case message.MessageTypeOperation:
+    			op, err := msg.DecodeOperation()
+    			if err != nil {
+    				fmt.Print("\n[SERVER]: Operacion invalida\n")
+    				continue
+    			}
 
-			state.Mutex().Lock()
-			isValid := true
-			for i := range state.SentChanges {
-				localOp := state.SentChanges[i]
-				state.SentChanges[i], _ = operation.Transform(localOp, op)
-				op, isValid = operation.Transform(op, localOp)
-				if !isValid {
-					break
-				}
-			}
+    			state.Mutex().Lock()
+    			isValid := true
+    			for i := range state.SentChanges {
+    				localOp := state.SentChanges[i]
+    				state.SentChanges[i], _ = operation.Transform(localOp, op)
+    				op, isValid = operation.Transform(op, localOp)
+    				if !isValid {
+    					break
+    				}
+    			}
 
-			if isValid {
-				for i := range state.PendingChanges {
-					localOp := state.PendingChanges[i]
-					state.PendingChanges[i], _ = operation.Transform(localOp, op)
-					op, isValid = operation.Transform(op, localOp)
-					if !isValid {
-						break
-					}
-				}
-			}
+    			if isValid {
+    				for i := range state.PendingChanges {
+    					localOp := state.PendingChanges[i]
+    					state.PendingChanges[i], _ = operation.Transform(localOp, op)
+    					op, isValid = operation.Transform(op, localOp)
+    					if !isValid {
+    						break
+    					}
+    				}
+    			}
 
-			state.LastSyncRevision++
-			state.Mutex().Unlock()
+    			state.LastSyncRevision++
+    			state.Mutex().Unlock()
 
-			if isValid {
-				fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
-			}
-		case message.MessageTypeAck:
-			ackMsg, err := msg.DecodeAck()
-			if err != nil {
-				fmt.Print("\n[SERVER]: Ack invalido\n")
-				continue
-			}
+    			if isValid {
+    				fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
+    			}
+    		case message.MessageTypeAck:
+    			ackMsg, err := msg.DecodeAck()
+    			if err != nil {
+    				fmt.Print("\n[SERVER]: Ack invalido\n")
+    				continue
+    			}
 
-			state.Mutex().Lock()
-			state.LastSyncRevision = ackMsg.Revision
+    			state.Mutex().Lock()
+    			state.LastSyncRevision = ackMsg.Revision
 
-			if len(state.SentChanges) > 0 {
-				state.SentChanges = state.SentChanges[1:]
-			}
+    			if len(state.SentChanges) > 0 {
+    				state.SentChanges = state.SentChanges[1:]
+    			}
 
-			if len(state.PendingChanges) > 0 {
-				nextOp := state.PendingChanges[0]
-				state.PendingChanges = state.PendingChanges[1:]
-				nextOp.Revision = state.LastSyncRevision
-				state.SentChanges = append(state.SentChanges, nextOp)
-				outMsg, _ := message.NewMessage(message.MessageTypeOperation, nextOp)
-				state.conn.WriteJSON(outMsg)
-			}
-			state.Mutex().Unlock()
-			fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
-		default:
-			fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n")
-		}
-	}
+    			if len(state.PendingChanges) > 0 {
+    				nextOp := state.PendingChanges[0]
+    				state.PendingChanges = state.PendingChanges[1:]
+    				nextOp.Revision = state.LastSyncRevision
+    				state.SentChanges = append(state.SentChanges, nextOp)
+    				outMsg, _ := message.NewMessage(message.MessageTypeOperation, nextOp)
+    				state.conn.WriteJSON(outMsg)
+    			}
+    			state.Mutex().Unlock()
+    			fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
+    		default:
+    			fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n")
+    		}
+    	}
+    }()
 }

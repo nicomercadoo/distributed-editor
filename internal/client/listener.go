@@ -11,7 +11,7 @@ import (
     "github.com/gorilla/websocket"
 )
 
-func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync.Mutex) {
+func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync.Mutex, notifications chan string) {
 		for {
 			var msg message.Message
 			err := conn.ReadJSON(&msg)
@@ -24,7 +24,8 @@ func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync
 			case message.MessageTypeOperation:
 				op, err := msg.DecodeOperation()
 				if err != nil {
-					fmt.Print("\n[SERVER]: Operacion invalida\n> ")
+				    notifications <- "[SERVER]: Operacion invalida"
+					// fmt.Print("\n[SERVER]: Operacion invalida\n> ")
 					continue
 				}
 
@@ -62,13 +63,15 @@ func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync
 
 				if isValid {
 					// Aca iría una posible lógica para escribir el documento.
-					fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
+					notifications <- fmt.Sprintf("Operación %s transformada a posición %d con contenido '%s'", op.Op, op.Position, op.Content)
+					// fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n> ", op.Op, op.Position, op.Content)
 				}
 
 			case message.MessageTypeAck:
 				ackMsg, err := msg.DecodeAck()
 				if err != nil {
-					fmt.Print("\n[SERVER]: Ack invalido\n> ")
+                    notifications <- "[SERVER]: Ack invalido"
+					// fmt.Print("\n[SERVER]: Ack invalido\n> ")
 					continue
 				}
 
@@ -93,10 +96,12 @@ func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync
 					conn.WriteJSON(outMsg) // WriteJSON está protegido por el Mutex
 				}
 				mu.Unlock()
-				fmt.Printf("\n[SERVER]: Ack revision %d\n> ", ackMsg.Revision)
+				notifications <- fmt.Sprintf("Ack revision %d", ackMsg.Revision)
+				// fmt.Printf("\n[SERVER]: Ack revision %d\n> ", ackMsg.Revision)
 
 			default:
-				fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n> ")
+                notifications <- "[SERVER]: Tipo de mensaje desconocido"
+				// fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n> ")
 			}
 		}
 	}
