@@ -1,15 +1,16 @@
 # REPL del cliente
 
-Este documento describe el REPL simple implementado en `internal/client/repl/`.
-Su proposito es proveer una interfaz interactiva basica para conectar, enviar
-comandos y mostrar estado, dejando la logica real para integrar despues.
+Este documento describe el REPL implementado en `internal/client/repl/`.
+Provee una interfaz interactiva para conectar, enviar comandos y recibir
+operaciones con transformacion local.
 
 ## Alcance
 
 - Parser de comandos con soporte de comillas y escapes.
 - Loop principal con `readline` para prompt, historial y navegacion con tecla UP.
 - Autocompletado por prefijo para comandos basicos.
-- Stubs de handlers para conectar la logica real mas adelante.
+- Handlers con logica basica de conexion, envio y transformacion.
+- Transformacion de operaciones entrantes contra colas locales.
 - Salida limpia con `CTRL-C` y `CTRL-D`.
 
 ## Estructura
@@ -18,24 +19,23 @@ comandos y mostrar estado, dejando la logica real para integrar despues.
 internal/client/repl/
   command.go    // struct Command
   parser.go     // Parse() y splitFields()
-  repl.go       // loop principal + handlers
-  state.go      // estado local del REPL
+  repl.go       // loop principal + handlers + listener
+  state.go      // estado local del REPL + colas
 ```
 
-## Comandos soportados (stubs)
+## Comandos soportados
 
 - `connect <uri>`
 - `disconnect`
-- `send <op>`
+- `insert <char> <pos>`
+- `delete <pos>`
 - `show`
 - `help`
 - `exit`
 
-## Prompt dinamico
+## Prompt
 
-- `>>>` por defecto
-- `OK >` cuando el estado indica conexion activa
-- `! >` si un handler devuelve error
+- Se mantiene fijo en `> `.
 
 ## Autocompletado
 
@@ -43,8 +43,8 @@ Se usa `readline.NewPrefixCompleter` con:
 
 - `connect`
 - `disconnect`
-- `send insert`
-- `send delete`
+- `insert`
+- `delete`
 - `show`
 - `help`
 - `exit`
@@ -55,6 +55,6 @@ Se usa `readline.NewPrefixCompleter` con:
 
 ## Integracion futura
 
-- Reemplazar los stubs en `registerHandlers()` con llamadas reales.
 - Persistir historial en un archivo propio del cliente.
-- Parsear `send <op>` a estructuras de operacion reales.
+- Conectar `show` con el estado local del documento.
+- Mejorar el reporte de errores y validaciones.

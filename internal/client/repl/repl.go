@@ -4,24 +4,25 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/chzyer/readline"
+	"github.com/gorilla/websocket"
+
+	"proyecto-final-redes/internal/protocol/message"
+	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type Handler func(*State, Command) error
-type propmtStatus struct {
-    file string
-    connected bool
-}
 
 type REPL struct {
-	rl              *readline.Instance
-	state           *State
-	handlers        map[string]Handler
-	propmtStatus    propmtStatus
-	Notity          chan string
+	rl       *readline.Instance
+	state    *State
+	handlers map[string]Handler
 }
 
 func NewREPL(state *State) (*REPL, error) {
@@ -65,8 +66,14 @@ func (r *REPL) Run() error {
 	printHelp()
 	prompt := "> "
 	for {
-	    
-	    line, err := r.getLine("[No File] [Local]", prompt)
+		line, err := r.getLine("[No File] [Local]", prompt)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			fmt.Println("error:", err)
+			continue
+		}
 		cmd, err := Parse(line)
 		if err != nil {
 			continue
@@ -78,7 +85,6 @@ func (r *REPL) Run() error {
 					return nil
 				}
 				fmt.Println("error:", err)
-				prompt = "! > "
 			} else {
 				prompt = "> "
 			}
@@ -103,23 +109,76 @@ func (r *REPL) registerHandlers() {
 		if len(cmd.Args) < 1 {
 			return errors.New("uso: connect <uri>")
 		}
-		fmt.Println("connect", cmd.Args[0])
-		s.SetConnection(nil);
+		if s.IsConnected() {
+			return errors.New("ya hay una conexion activa")
+		}
+		if _, err := url.ParseRequestURI(cmd.Args[0]); err != nil {
+			return errors.New("uri invalida")
+		}
+		conn, _, err := websocket.DefaultDialer.Dial(cmd.Args[0], nil)
+		if err != nil {
+			return err
+		}
+		s.SetConnection(conn)
+		done := make(chan struct{})
+		s.SetListenerDone(done)
+		go listenServer(s)
+		fmt.Println("conectado")
 		return nil
 	}
 
 	r.handlers["disconnect"] = func(s *State, _ Command) error {
-		fmt.Println("disconnect")
-		s.SetConnection(nil);
+		if !s.IsConnected() {
+			return errors.New("no hay conexion activa")
+		}
+		if s.ListenerDone() != nil {
+			close(s.ListenerDone())
+			s.SetListenerDone(nil)
+		}
+		_ = s.conn.Close()
+		s.SetConnection(nil)
+		fmt.Println("desconectado")
 		return nil
 	}
 
-	r.handlers["send"] = func(_ *State, cmd Command) error {
-		if len(cmd.Args) < 1 {
-			return errors.New("uso: send <op>")
+	r.handlers["insert"] = func(s *State, cmd Command) error {
+		if len(cmd.Args) < 2 {
+			return errors.New("uso: insert <char> <pos>")
 		}
-		fmt.Println("send", strings.Join(cmd.Args, " "))
-		return nil
+		if !s.IsConnected() {
+			return errors.New("no hay conexion activa")
+		}
+		if utf8.RuneCountInString(cmd.Args[0]) != 1 {
+			return errors.New("insert requiere un solo caracter")
+		}
+		pos, err := strconv.Atoi(cmd.Args[1])
+		if err != nil || pos < 0 {
+			return errors.New("posicion invalida")
+		}
+		op := operation.Operation{
+			Op:       operation.Insert,
+			Position: pos,
+			Content:  cmd.Args[0],
+		}
+		return enqueueAndSend(s, op)
+	}
+
+	r.handlers["delete"] = func(s *State, cmd Command) error {
+		if len(cmd.Args) < 1 {
+			return errors.New("uso: delete <pos>")
+		}
+		if !s.IsConnected() {
+			return errors.New("no hay conexion activa")
+		}
+		pos, err := strconv.Atoi(cmd.Args[0])
+		if err != nil || pos < 0 {
+			return errors.New("posicion invalida")
+		}
+		op := operation.Operation{
+			Op:       operation.Delete,
+			Position: pos,
+		}
+		return enqueueAndSend(s, op)
 	}
 
 	r.handlers["show"] = func(_ *State, _ Command) error {
@@ -145,10 +204,8 @@ func newCompleter() *readline.PrefixCompleter {
 	return readline.NewPrefixCompleter(
 		readline.PcItem("connect"),
 		readline.PcItem("disconnect"),
-		readline.PcItem("send",
-			readline.PcItem("insert"),
-			readline.PcItem("delete"),
-		),
+		readline.PcItem("insert"),
+		readline.PcItem("delete"),
 		readline.PcItem("show"),
 		readline.PcItem("help"),
 		readline.PcItem("exit"),
@@ -157,16 +214,16 @@ func newCompleter() *readline.PrefixCompleter {
 
 func (r *REPL) getLine(status string, prompt string) (string, error) {
 
-    fmt.Printf("\n%s\n", status)
-    r.rl.SetPrompt(prompt)
+	fmt.Printf("\n%s\n", status)
+	r.rl.SetPrompt(prompt)
 
 	line, err := r.rl.Readline()
 	if err != nil {
 		if errors.Is(err, readline.ErrInterrupt) {
-			return "", nil
+			return "", io.EOF
 		}
 		if errors.Is(err, io.EOF) {
-			return "", nil
+			return "", io.EOF
 		}
 		return "", err
 	}
@@ -190,8 +247,108 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "Comandos disponibles:")
 	fmt.Fprintln(os.Stdout, "    connect <uri>")
 	fmt.Fprintln(os.Stdout, "    disconnect")
-	fmt.Fprintln(os.Stdout, "    send <op>")
+	fmt.Fprintln(os.Stdout, "    insert <char> <pos>")
+	fmt.Fprintln(os.Stdout, "    delete <pos>")
 	fmt.Fprintln(os.Stdout, "    show")
 	fmt.Fprintln(os.Stdout, "    help")
 	fmt.Fprintln(os.Stdout, "    exit")
+}
+
+func enqueueAndSend(s *State, op operation.Operation) error {
+	s.Mutex().Lock()
+	op.Revision = s.LastSyncRevision
+
+	if len(s.SentChanges) == 0 {
+		s.SentChanges = append(s.SentChanges, op)
+		s.Mutex().Unlock()
+		msg, err := message.NewMessage(message.MessageTypeOperation, op)
+		if err != nil {
+			return err
+		}
+		return s.conn.WriteJSON(msg)
+	}
+
+	s.PendingChanges = append(s.PendingChanges, op)
+	s.Mutex().Unlock()
+	return nil
+}
+
+func listenServer(s *State) {
+	for {
+		select {
+		case <-s.ListenerDone():
+			return
+		default:
+		}
+
+		var msg message.Message
+		if err := s.conn.ReadJSON(&msg); err != nil {
+			fmt.Println("\nConexión cerrada por el servidor.")
+			return
+		}
+
+		switch msg.Type {
+		case message.MessageTypeOperation:
+			op, err := msg.DecodeOperation()
+			if err != nil {
+				fmt.Print("\n[SERVER]: Operacion invalida\n")
+				continue
+			}
+
+			s.Mutex().Lock()
+			isValid := true
+			for i := range s.SentChanges {
+				localOp := s.SentChanges[i]
+				s.SentChanges[i], _ = operation.Transform(localOp, op)
+				op, isValid = operation.Transform(op, localOp)
+				if !isValid {
+					break
+				}
+			}
+
+			if isValid {
+				for i := range s.PendingChanges {
+					localOp := s.PendingChanges[i]
+					s.PendingChanges[i], _ = operation.Transform(localOp, op)
+					op, isValid = operation.Transform(op, localOp)
+					if !isValid {
+						break
+					}
+				}
+			}
+
+			s.LastSyncRevision++
+			s.Mutex().Unlock()
+
+			if isValid {
+				fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
+			}
+		case message.MessageTypeAck:
+			ackMsg, err := msg.DecodeAck()
+			if err != nil {
+				fmt.Print("\n[SERVER]: Ack invalido\n")
+				continue
+			}
+
+			s.Mutex().Lock()
+			s.LastSyncRevision = ackMsg.Revision
+
+			if len(s.SentChanges) > 0 {
+				s.SentChanges = s.SentChanges[1:]
+			}
+
+			if len(s.PendingChanges) > 0 {
+				nextOp := s.PendingChanges[0]
+				s.PendingChanges = s.PendingChanges[1:]
+				nextOp.Revision = s.LastSyncRevision
+				s.SentChanges = append(s.SentChanges, nextOp)
+				outMsg, _ := message.NewMessage(message.MessageTypeOperation, nextOp)
+				s.conn.WriteJSON(outMsg)
+			}
+			s.Mutex().Unlock()
+			fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
+		default:
+			fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n")
+		}
+	}
 }
