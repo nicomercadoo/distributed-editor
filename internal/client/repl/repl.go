@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/chzyer/readline"
@@ -26,6 +27,7 @@ type REPL struct {
 	prompt   string
 	prompt_status string
 	notifications chan string
+	mu sync.RWMutex
 }
 
 func NewREPL(state *State) (*REPL, error) {
@@ -48,6 +50,7 @@ func NewREPL(state *State) (*REPL, error) {
 		prompt: prompt,
 		prompt_status: "[Local]",
 		notifications: make(chan string),
+		mu: sync.RWMutex{},
 	}
 
 	repl.registerHandlers()
@@ -71,6 +74,8 @@ func (r *REPL) Close() {
 func (r *REPL) Run() error {
 	defer r.Close()
 	printHelp()
+
+	go r.NotificationServer()
 
 	for {
 		line, err := r.getLine()
@@ -103,9 +108,9 @@ func (r *REPL) Run() error {
 	}
 }
 
-func (r *REPL) NotificationServer(message string) {
+func (r *REPL) NotificationServer() {
     for msg := range r.notifications {
-        r.rl.Write([]byte("\n[!] " + msg + "\n"))
+        r.rl.Write([]byte("[!] " + msg + "\n"))
         r.rl.Refresh()
     }
 }
@@ -219,8 +224,8 @@ func newCompleter() *readline.PrefixCompleter {
 
 func (r *REPL) getLine() (string, error) {
 
-	fmt.Printf("\n%s\n", r.prompt_status)
-	r.rl.SetPrompt(r.prompt)
+	fmt.Println("")
+	r.rl.SetPrompt(r.prompt_status+r.prompt)
 
 	line, err := r.rl.Readline()
 	if err != nil {
@@ -238,12 +243,12 @@ func (r *REPL) getLine() (string, error) {
 	// EL TRUCO TRANSIENT ✨
 	// El cursor bajó una línea tras el 'Enter'.
 	// Subimos 3 líneas (una por el '>', otra por el estado) y borramos.
-	fmt.Print("\033[3A\033[J")
+	// fmt.Print("\033[3A\033[J")
 
 	// Reescribimos el comando en el historial para que quede limpio
-	if line != "" {
-		fmt.Printf("%s%s\n", r.prompt, line)
-	}
+	// if line != "" {
+	// 	fmt.Printf("%s%s\n", r.prompt, line)
+	// }
 
 	return line, nil
 }
@@ -298,7 +303,8 @@ func (r *REPL) listenServer() {
 
     		var msg message.Message
     		if err := state.conn.ReadJSON(&msg); err != nil {
-    			fmt.Println("\nConexión cerrada por el servidor.")
+                r.notifications <- "Conexión cerrada por el servidor."
+    			// fmt.Println("\nConexión cerrada por el servidor.")
     			return
     		}
 
@@ -306,7 +312,8 @@ func (r *REPL) listenServer() {
     		case message.MessageTypeOperation:
     			op, err := msg.DecodeOperation()
     			if err != nil {
-    				fmt.Print("\n[SERVER]: Operacion invalida\n")
+                    r.notifications <- "Operacion invalida recibida del servidor."
+    				// fmt.Print("\n[SERVER]: Operacion invalida\n")
     				continue
     			}
 
@@ -336,12 +343,14 @@ func (r *REPL) listenServer() {
     			state.Mutex().Unlock()
 
     			if isValid {
-    				fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
+                    r.notifications <- fmt.Sprintf("Operación %s transformada a posición %d con contenido '%s'", op.Op, op.Position, op.Content)
+    				// fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
     			}
     		case message.MessageTypeAck:
     			ackMsg, err := msg.DecodeAck()
     			if err != nil {
-    				fmt.Print("\n[SERVER]: Ack invalido\n")
+                    r.notifications <- "Ack invalido recibido del servidor."
+    				// fmt.Print("\n[SERVER]: Ack invalido\n")
     				continue
     			}
 
@@ -361,8 +370,10 @@ func (r *REPL) listenServer() {
     				state.conn.WriteJSON(outMsg)
     			}
     			state.Mutex().Unlock()
-    			fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
+                r.notifications <- fmt.Sprintf("Ack revision %d recibido del servidor.", ackMsg.Revision)
+    			// fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
     		default:
+                r.notifications <- "Tipo de mensaje desconocido recibido del servidor."
     			fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n")
     		}
     	}

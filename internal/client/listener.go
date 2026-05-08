@@ -16,6 +16,7 @@ func serverListener(conn *websocket.Conn, docState *DocumentLocalState, mu *sync
 			var msg message.Message
 			err := conn.ReadJSON(&msg)
 			if err != nil {
+
 				fmt.Println("\nConexión cerrada por el servidor.")
 				os.Exit(0)
 			}
