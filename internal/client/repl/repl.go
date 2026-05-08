@@ -23,11 +23,15 @@ type REPL struct {
 	rl       *readline.Instance
 	state    *State
 	handlers map[string]Handler
+	prompt   string
+	prompt_status string
+	notifications chan string
 }
 
 func NewREPL(state *State) (*REPL, error) {
+    prompt := "> "
 	config := &readline.Config{
-		Prompt:       "> ",
+		Prompt:       prompt,
 		HistoryFile:  ".client_history",
 		AutoComplete: newCompleter(),
 	}
@@ -41,6 +45,9 @@ func NewREPL(state *State) (*REPL, error) {
 		rl:       rl,
 		state:    state,
 		handlers: map[string]Handler{},
+		prompt: prompt,
+		prompt_status: "[Local]",
+		notifications: make(chan string),
 	}
 
 	repl.registerHandlers()
@@ -64,9 +71,9 @@ func (r *REPL) Close() {
 func (r *REPL) Run() error {
 	defer r.Close()
 	printHelp()
-	prompt := "> "
+
 	for {
-		line, err := r.getLine("[No File] [Local]", prompt)
+		line, err := r.getLine()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
@@ -85,8 +92,9 @@ func (r *REPL) Run() error {
 					return nil
 				}
 				fmt.Println("error:", err)
+				r.updatePrompt("!> ")
 			} else {
-				prompt = "> "
+				r.updatePrompt("> ")
 			}
 			continue
 		}
@@ -124,6 +132,7 @@ func (r *REPL) registerHandlers() {
 		s.SetListenerDone(done)
 		go listenServer(s)
 		fmt.Println("conectado")
+		r.updatePromptStatus("\033[32m[Conectado]\033[0m")
 		return nil
 	}
 
@@ -138,6 +147,7 @@ func (r *REPL) registerHandlers() {
 		_ = s.conn.Close()
 		s.SetConnection(nil)
 		fmt.Println("desconectado")
+		r.updatePromptStatus("[Local]")
 		return nil
 	}
 
@@ -187,18 +197,6 @@ func (r *REPL) registerHandlers() {
 	}
 }
 
-// func (r *REPL) setPrompt(prompt string) {
-// 	r.rl.SetPrompt(prompt)
-// 	r.rl.Refresh()
-// }
-
-// func (r *REPL) setPromptForState() {
-// 	if r.state.IsConnected() {
-// 		r.setPrompt("OK > ")
-// 		return
-// 	}
-// 	r.setPrompt(">>> ")
-// }
 
 func newCompleter() *readline.PrefixCompleter {
 	return readline.NewPrefixCompleter(
@@ -212,10 +210,10 @@ func newCompleter() *readline.PrefixCompleter {
 	)
 }
 
-func (r *REPL) getLine(status string, prompt string) (string, error) {
+func (r *REPL) getLine() (string, error) {
 
-	fmt.Printf("\n%s\n", status)
-	r.rl.SetPrompt(prompt)
+	fmt.Printf("\n%s\n", r.prompt_status)
+	r.rl.SetPrompt(r.prompt)
 
 	line, err := r.rl.Readline()
 	if err != nil {
@@ -237,10 +235,18 @@ func (r *REPL) getLine(status string, prompt string) (string, error) {
 
 	// Reescribimos el comando en el historial para que quede limpio
 	if line != "" {
-		fmt.Printf("%s%s\n", prompt, line)
+		fmt.Printf("%s%s\n", r.prompt, line)
 	}
 
 	return line, nil
+}
+
+func (r *REPL) updatePromptStatus(status string) {
+    r.prompt_status = status
+}
+
+func (r *REPL) updatePrompt(prompt string) {
+    r.prompt = prompt
 }
 
 func printHelp() {
@@ -273,16 +279,17 @@ func enqueueAndSend(s *State, op operation.Operation) error {
 	return nil
 }
 
-func listenServer(s *State) {
+func (r *REPL) listenServer() {
+    state := r.state
 	for {
 		select {
-		case <-s.ListenerDone():
+		case <-state.ListenerDone():
 			return
 		default:
 		}
 
 		var msg message.Message
-		if err := s.conn.ReadJSON(&msg); err != nil {
+		if err := state.conn.ReadJSON(&msg); err != nil {
 			fmt.Println("\nConexión cerrada por el servidor.")
 			return
 		}
@@ -295,11 +302,11 @@ func listenServer(s *State) {
 				continue
 			}
 
-			s.Mutex().Lock()
+			state.Mutex().Lock()
 			isValid := true
-			for i := range s.SentChanges {
-				localOp := s.SentChanges[i]
-				s.SentChanges[i], _ = operation.Transform(localOp, op)
+			for i := range state.SentChanges {
+				localOp := state.SentChanges[i]
+				state.SentChanges[i], _ = operation.Transform(localOp, op)
 				op, isValid = operation.Transform(op, localOp)
 				if !isValid {
 					break
@@ -307,9 +314,9 @@ func listenServer(s *State) {
 			}
 
 			if isValid {
-				for i := range s.PendingChanges {
-					localOp := s.PendingChanges[i]
-					s.PendingChanges[i], _ = operation.Transform(localOp, op)
+				for i := range state.PendingChanges {
+					localOp := state.PendingChanges[i]
+					state.PendingChanges[i], _ = operation.Transform(localOp, op)
 					op, isValid = operation.Transform(op, localOp)
 					if !isValid {
 						break
@@ -317,8 +324,8 @@ func listenServer(s *State) {
 				}
 			}
 
-			s.LastSyncRevision++
-			s.Mutex().Unlock()
+			state.LastSyncRevision++
+			state.Mutex().Unlock()
 
 			if isValid {
 				fmt.Printf("\n[SERVER]: Operación %s transformada a posición %d con contenido '%s'\n", op.Op, op.Position, op.Content)
@@ -330,22 +337,22 @@ func listenServer(s *State) {
 				continue
 			}
 
-			s.Mutex().Lock()
-			s.LastSyncRevision = ackMsg.Revision
+			state.Mutex().Lock()
+			state.LastSyncRevision = ackMsg.Revision
 
-			if len(s.SentChanges) > 0 {
-				s.SentChanges = s.SentChanges[1:]
+			if len(state.SentChanges) > 0 {
+				state.SentChanges = state.SentChanges[1:]
 			}
 
-			if len(s.PendingChanges) > 0 {
-				nextOp := s.PendingChanges[0]
-				s.PendingChanges = s.PendingChanges[1:]
-				nextOp.Revision = s.LastSyncRevision
-				s.SentChanges = append(s.SentChanges, nextOp)
+			if len(state.PendingChanges) > 0 {
+				nextOp := state.PendingChanges[0]
+				state.PendingChanges = state.PendingChanges[1:]
+				nextOp.Revision = state.LastSyncRevision
+				state.SentChanges = append(state.SentChanges, nextOp)
 				outMsg, _ := message.NewMessage(message.MessageTypeOperation, nextOp)
-				s.conn.WriteJSON(outMsg)
+				state.conn.WriteJSON(outMsg)
 			}
-			s.Mutex().Unlock()
+			state.Mutex().Unlock()
 			fmt.Printf("\n[SERVER]: Ack revision %d\n", ackMsg.Revision)
 		default:
 			fmt.Print("\n[SERVER]: Tipo de mensaje desconocido\n")
