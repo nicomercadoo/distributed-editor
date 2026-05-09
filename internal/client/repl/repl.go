@@ -289,15 +289,22 @@ func (r *REPL) shouldAddLatency() bool {
 }
 
 func printHelp() {
-	fmt.Fprintln(os.Stdout, "Comandos disponibles:")
-	fmt.Fprintln(os.Stdout, "    connect <uri>")
-	fmt.Fprintln(os.Stdout, "    disconnect")
-	fmt.Fprintln(os.Stdout, "    insert <char> <pos>")
-	fmt.Fprintln(os.Stdout, "    delete <pos>")
-	fmt.Fprintln(os.Stdout, "    latency <ms>")
-	fmt.Fprintln(os.Stdout, "    show")
-	fmt.Fprintln(os.Stdout, "    help")
-	fmt.Fprintln(os.Stdout, "    exit")
+    fmt.Fprintln(os.Stdout, `Comandos disponibles:
+    connect <uri>           Connect to the server at the specified
+                            URI (e.g. ws://localhost:8080/ws)
+    disconnect              Disconnect from the server
+    insert <char> <pos>     Send an insert operation
+    delete <pos>            Send a delete operation
+    latency <ms>            Set artificial latency in milliseconds
+                            for outgoing messages. Use 0 to disable.
+    show
+    help                    Show this help message
+    exit                    Quit the REPL
+
+Keys:
+    Ctrl+C:                 Quit the REPL
+    TAB:                    Auto-complete commands
+    UP/DOWN:                Navigate command history`)
 }
 
 func (r *REPL) enqueueAndSend(s *State, op operation.Operation) error {
