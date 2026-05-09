@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/chzyer/readline"
@@ -24,8 +25,9 @@ type REPL struct {
 	rl       *readline.Instance
 	state    *State
 	handlers map[string]Handler
-	prompt   string
-	prompt_status string
+	prompt_symbol   string
+	prompt_connection string
+	latency int
 	notifications chan string
 	mu sync.RWMutex
 }
@@ -47,8 +49,8 @@ func NewREPL(state *State) (*REPL, error) {
 		rl:       rl,
 		state:    state,
 		handlers: map[string]Handler{},
-		prompt: prompt,
-		prompt_status: "[Local]",
+		prompt_symbol: prompt,
+		prompt_connection: "[Local]",
 		notifications: make(chan string),
 		mu: sync.RWMutex{},
 	}
@@ -97,9 +99,9 @@ func (r *REPL) Run() error {
 					return nil
 				}
 				fmt.Println("error:", err)
-				r.updatePrompt("!> ")
+				r.prompt_symbol = "!> "
 			} else {
-				r.updatePrompt("> ")
+				r.prompt_symbol = "> "
 			}
 			continue
 		}
@@ -144,7 +146,7 @@ func (r *REPL) registerHandlers() {
 		s.SetListenerDone(done)
 		r.listenServer()
 		fmt.Println("conectado")
-		r.updatePromptStatus("\033[32m[Conectado]\033[0m")
+		r.prompt_connection = "\033[32m[Conectado]\033[0m"
 		return nil
 	}
 
@@ -159,7 +161,7 @@ func (r *REPL) registerHandlers() {
 		_ = s.conn.Close()
 		s.SetConnection(nil)
 		fmt.Println("desconectado")
-		r.updatePromptStatus("[Local]")
+		r.prompt_connection = "[Local]"
 		return nil
 	}
 
@@ -182,7 +184,7 @@ func (r *REPL) registerHandlers() {
 			Position: pos,
 			Content:  cmd.Args[0],
 		}
-		return enqueueAndSend(s, op)
+		return r.enqueueAndSend(s, op)
 	}
 
 	r.handlers["delete"] = func(s *State, cmd Command) error {
@@ -200,8 +202,23 @@ func (r *REPL) registerHandlers() {
 			Op:       operation.Delete,
 			Position: pos,
 		}
-		return enqueueAndSend(s, op)
+		return r.enqueueAndSend(s, op)
 	}
+
+	r.handlers["latency"] = func(_ *State, cmd Command) error {
+        if len(cmd.Args) < 1 {
+            return errors.New("uso: latency <ms>")
+        }
+        ms, err := strconv.Atoi(cmd.Args[0])
+        if err != nil || ms < 0 {
+            return errors.New("latencia invalida")
+        }
+        r.mu.Lock()
+        r.latency = ms
+        r.mu.Unlock()
+        fmt.Printf("latencia establecida a %d ms\n", ms)
+        return nil
+    }
 
 	r.handlers["show"] = func(_ *State, _ Command) error {
 		fmt.Println("show")
@@ -214,6 +231,7 @@ func newCompleter() *readline.PrefixCompleter {
 	return readline.NewPrefixCompleter(
 		readline.PcItem("connect"),
 		readline.PcItem("disconnect"),
+		readline.PcItem("latency"),
 		readline.PcItem("insert"),
 		readline.PcItem("delete"),
 		readline.PcItem("show"),
@@ -224,8 +242,21 @@ func newCompleter() *readline.PrefixCompleter {
 
 func (r *REPL) getLine() (string, error) {
 
-	fmt.Println("")
-	r.rl.SetPrompt(r.prompt_status+r.prompt)
+	fmt.Println("") // Add new line after each command for better readability
+
+	promptConnection := "[Local]"
+	if r.state.IsConnected() {
+	    promptConnection = "\033[32m[Conectado]\033[0m"
+	}
+
+	promptLatency := ""
+    if r.shouldAddLatency() {
+        r.mu.RLock()
+        promptLatency = fmt.Sprintf("\033[33m[%dms]\033[0m", r.latency)
+        r.mu.RUnlock()
+    }
+
+	r.rl.SetPrompt(promptConnection + promptLatency + r.prompt_symbol)
 
 	line, err := r.rl.Readline()
 	if err != nil {
@@ -253,12 +284,8 @@ func (r *REPL) getLine() (string, error) {
 	return line, nil
 }
 
-func (r *REPL) updatePromptStatus(status string) {
-    r.prompt_status = status
-}
-
-func (r *REPL) updatePrompt(prompt string) {
-    r.prompt = prompt
+func (r *REPL) shouldAddLatency() bool {
+    return r.latency > 0
 }
 
 func printHelp() {
@@ -267,12 +294,13 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "    disconnect")
 	fmt.Fprintln(os.Stdout, "    insert <char> <pos>")
 	fmt.Fprintln(os.Stdout, "    delete <pos>")
+	fmt.Fprintln(os.Stdout, "    latency <ms>")
 	fmt.Fprintln(os.Stdout, "    show")
 	fmt.Fprintln(os.Stdout, "    help")
 	fmt.Fprintln(os.Stdout, "    exit")
 }
 
-func enqueueAndSend(s *State, op operation.Operation) error {
+func (r *REPL) enqueueAndSend(s *State, op operation.Operation) error {
 	s.Mutex().Lock()
 	op.Revision = s.LastSyncRevision
 
@@ -283,6 +311,12 @@ func enqueueAndSend(s *State, op operation.Operation) error {
 		if err != nil {
 			return err
 		}
+		if r.shouldAddLatency() {
+            r.mu.RLock()
+            latency := r.latency
+            r.mu.RUnlock()
+            time.Sleep(time.Duration(latency) * time.Millisecond)
+        }
 		return s.conn.WriteJSON(msg)
 	}
 
