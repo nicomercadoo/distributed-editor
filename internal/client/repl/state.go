@@ -61,6 +61,14 @@ func (s *State) ListenerDone() chan struct{} {
 	return s.listenerDone
 }
 
+func (s *State) SetSenderDone(done chan struct{}) {
+    s.senderDone = done
+}
+
+func (s *State) SenderDone() chan struct{} {
+    return s.senderDone
+}
+
 func (s *State) SetLatency(ms int) {
     s.mu.Lock()
     s.latency = ms
