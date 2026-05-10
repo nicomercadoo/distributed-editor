@@ -18,9 +18,10 @@ type State struct {
 	conn                *websocket.Conn
 	senderDone          chan struct{} // Canal para indicar que la goroutine de envío al servidor ha terminado
 	listenerDone        chan struct{} // Canal para indicar que la goroutine de escucha del servidor ha terminado
+	notifications       chan string
 	mu                  *sync.RWMutex
 	latency             int
-	promptSymbol       string
+	promptSymbol         string
 	LastSyncRevision    document.ID
 	PendingChanges      []operation.Operation
 	SentChange          SentChange
@@ -29,14 +30,16 @@ type State struct {
 
 func NewState() *State {
 	return &State{
-		conn:             nil,
-		listenerDone:     nil,
-		mu:               &sync.RWMutex{},
-		promptSymbol:    "> ",
-		LastSyncRevision: 0,
-		PendingChanges:   make([]operation.Operation, 0),
-		SentChange:       SentChange{Op: operation.Operation{}, Received: false},
-		Document:         "",
+		conn:               nil,
+		listenerDone:       nil,
+		senderDone:         nil,
+		notifications:      make(chan string),
+		mu:                 &sync.RWMutex{},
+		promptSymbol:       "> ",
+		LastSyncRevision:   0,
+		PendingChanges:     make([]operation.Operation, 0),
+		SentChange:         SentChange{Op: operation.Operation{}, Received: false},
+		Document:           "",
 	}
 }
 
