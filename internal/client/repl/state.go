@@ -9,30 +9,40 @@ import (
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
+type SentChange struct {
+    Op       operation.Operation
+    Received bool
+}
+
 type State struct {
-	conn             *websocket.Conn
-	listenerDone     chan struct{}
-	mu               *sync.Mutex
-	latency          int
-	LastSyncRevision document.ID
-	PendingChanges   []operation.Operation
-	SentChanges      []operation.Operation
-	Document         document.DocumentRep
+	conn                *websocket.Conn
+	senderDone          chan struct{} // Canal para indicar que la goroutine de envío al servidor ha terminado
+	listenerDone        chan struct{} // Canal para indicar que la goroutine de escucha del servidor ha terminado
+	mu                  *sync.RWMutex
+	latency             int
+	promptSymbol       string
+	LastSyncRevision    document.ID
+	PendingChanges      []operation.Operation
+	SentChange          SentChange
+	Document            document.DocumentRep
 }
 
 func NewState() *State {
 	return &State{
 		conn:             nil,
 		listenerDone:     nil,
-		mu:               &sync.Mutex{},
+		mu:               &sync.RWMutex{},
+		promptSymbol:    "> ",
 		LastSyncRevision: 0,
 		PendingChanges:   make([]operation.Operation, 0),
-		SentChanges:      make([]operation.Operation, 0),
+		SentChange:       SentChange{Op: operation.Operation{}, Received: false},
 		Document:         "",
 	}
 }
 
 func (s *State) IsConnected() bool {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
 	return s.conn != nil
 }
 
@@ -60,6 +70,6 @@ func (s *State) Latency() int {
     return s.latency
 }
 
-func (s *State) Mutex() *sync.Mutex {
+func (s *State) Mutex() *sync.RWMutex {
 	return s.mu
 }

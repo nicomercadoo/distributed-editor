@@ -25,16 +25,13 @@ type REPL struct {
 	rl       *readline.Instance
 	state    *State
 	handlers map[string]Handler
-	prompt_symbol   string
-	prompt_connection string
 	notifications chan string
 	mu sync.RWMutex
 }
 
 func NewREPL(state *State) (*REPL, error) {
-    prompt := "> "
 	config := &readline.Config{
-		Prompt:       prompt,
+		Prompt:       state.promptSymbol,
 		HistoryFile:  ".client_history",
 		AutoComplete: newCompleter(),
 	}
@@ -48,8 +45,6 @@ func NewREPL(state *State) (*REPL, error) {
 		rl:       rl,
 		state:    state,
 		handlers: map[string]Handler{},
-		prompt_symbol: prompt,
-		prompt_connection: "[Local]",
 		notifications: make(chan string),
 		mu: sync.RWMutex{},
 	}
@@ -63,6 +58,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+	defer repl.Close()
 	return repl.Run()
 }
 
@@ -98,9 +94,9 @@ func (r *REPL) Run() error {
 					return nil
 				}
 				fmt.Println("error:", err)
-				r.prompt_symbol = "!> "
+				r.state.promptSymbol = "!> "
 			} else {
-				r.prompt_symbol = "> "
+				r.state.promptSymbol = "> "
 			}
 			continue
 		}
@@ -144,7 +140,7 @@ func (r *REPL) registerHandlers() {
 		done := make(chan struct{})
 		s.SetListenerDone(done)
 		r.listenServer()
-		r.prompt_connection = "\033[32m[Conectado]\033[0m"
+		s.promptSymbol = "\033[32m[Conectado]\033[0m"
 		return nil
 	}
 
@@ -158,7 +154,6 @@ func (r *REPL) registerHandlers() {
 		}
 		_ = s.conn.Close()
 		s.SetConnection(nil)
-		r.prompt_connection = "[Local]"
 		return nil
 	}
 
@@ -181,7 +176,7 @@ func (r *REPL) registerHandlers() {
 			Position: pos,
 			Content:  cmd.Args[0],
 		}
-		return r.enqueueAndSend(op)
+		return enqueueAndSend(s, op)
 	}
 
 	r.handlers["delete"] = func(s *State, cmd Command) error {
@@ -199,7 +194,7 @@ func (r *REPL) registerHandlers() {
 			Op:       operation.Delete,
 			Position: pos,
 		}
-		return r.enqueueAndSend(op)
+		return enqueueAndSend(s, op)
 	}
 
 	r.handlers["latency"] = func(s *State, cmd Command) error {
@@ -248,7 +243,7 @@ func (r *REPL) getLine() (string, error) {
         promptLatency = fmt.Sprintf("\033[33m[%dms]\033[0m", r.state.Latency())
     }
 
-	r.rl.SetPrompt(promptConnection + promptLatency + r.prompt_symbol)
+	r.rl.SetPrompt(promptConnection + promptLatency + r.state.promptSymbol)
 
 	line, err := r.rl.Readline()
 	if err != nil {
@@ -286,19 +281,18 @@ Keys:
     UP/DOWN:                Navigate command history`)
 }
 
-func (r *REPL) enqueueAndSend(op operation.Operation) error {
-    s := r.state
+func enqueueAndSend(s *State, op operation.Operation) error {
 	s.Mutex().Lock()
 	op.Revision = s.LastSyncRevision
 
-	if len(s.SentChanges) == 0 {
-		s.SentChanges = append(s.SentChanges, op)
+	if s.SentChange == (SentChange{}) {
+		s.SentChange = SentChange{Op: op, Received: false}
 		s.Mutex().Unlock()
 		msg, err := message.NewMessage(message.MessageTypeOperation, op)
 		if err != nil {
 			return err
 		}
-		if latency := r.state.Latency(); latency > 0 {
+		if latency := s.Latency(); latency > 0 {
             time.Sleep(time.Duration(latency) * time.Millisecond)
         }
 		return s.conn.WriteJSON(msg)
