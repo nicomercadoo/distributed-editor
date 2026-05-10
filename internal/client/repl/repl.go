@@ -27,7 +27,6 @@ type REPL struct {
 	handlers map[string]Handler
 	prompt_symbol   string
 	prompt_connection string
-	latency int
 	notifications chan string
 	mu sync.RWMutex
 }
@@ -145,7 +144,6 @@ func (r *REPL) registerHandlers() {
 		done := make(chan struct{})
 		s.SetListenerDone(done)
 		r.listenServer()
-		fmt.Println("conectado")
 		r.prompt_connection = "\033[32m[Conectado]\033[0m"
 		return nil
 	}
@@ -160,7 +158,6 @@ func (r *REPL) registerHandlers() {
 		}
 		_ = s.conn.Close()
 		s.SetConnection(nil)
-		fmt.Println("desconectado")
 		r.prompt_connection = "[Local]"
 		return nil
 	}
@@ -184,7 +181,7 @@ func (r *REPL) registerHandlers() {
 			Position: pos,
 			Content:  cmd.Args[0],
 		}
-		return r.enqueueAndSend(s, op)
+		return r.enqueueAndSend(op)
 	}
 
 	r.handlers["delete"] = func(s *State, cmd Command) error {
@@ -202,10 +199,10 @@ func (r *REPL) registerHandlers() {
 			Op:       operation.Delete,
 			Position: pos,
 		}
-		return r.enqueueAndSend(s, op)
+		return r.enqueueAndSend(op)
 	}
 
-	r.handlers["latency"] = func(_ *State, cmd Command) error {
+	r.handlers["latency"] = func(s *State, cmd Command) error {
         if len(cmd.Args) < 1 {
             return errors.New("uso: latency <ms>")
         }
@@ -213,10 +210,7 @@ func (r *REPL) registerHandlers() {
         if err != nil || ms < 0 {
             return errors.New("latencia invalida")
         }
-        r.mu.Lock()
-        r.latency = ms
-        r.mu.Unlock()
-        fmt.Printf("latencia establecida a %d ms\n", ms)
+        s.SetLatency(ms)
         return nil
     }
 
@@ -250,10 +244,8 @@ func (r *REPL) getLine() (string, error) {
 	}
 
 	promptLatency := ""
-    if r.shouldAddLatency() {
-        r.mu.RLock()
-        promptLatency = fmt.Sprintf("\033[33m[%dms]\033[0m", r.latency)
-        r.mu.RUnlock()
+    if r.state.Latency() > 0 {
+        promptLatency = fmt.Sprintf("\033[33m[%dms]\033[0m", r.state.Latency())
     }
 
 	r.rl.SetPrompt(promptConnection + promptLatency + r.prompt_symbol)
@@ -271,22 +263,9 @@ func (r *REPL) getLine() (string, error) {
 
 	line = strings.TrimSpace(line)
 
-	// EL TRUCO TRANSIENT ✨
-	// El cursor bajó una línea tras el 'Enter'.
-	// Subimos 3 líneas (una por el '>', otra por el estado) y borramos.
-	// fmt.Print("\033[3A\033[J")
-
-	// Reescribimos el comando en el historial para que quede limpio
-	// if line != "" {
-	// 	fmt.Printf("%s%s\n", r.prompt, line)
-	// }
-
 	return line, nil
 }
 
-func (r *REPL) shouldAddLatency() bool {
-    return r.latency > 0
-}
 
 func printHelp() {
     fmt.Fprintln(os.Stdout, `Comandos disponibles:
@@ -307,7 +286,8 @@ Keys:
     UP/DOWN:                Navigate command history`)
 }
 
-func (r *REPL) enqueueAndSend(s *State, op operation.Operation) error {
+func (r *REPL) enqueueAndSend(op operation.Operation) error {
+    s := r.state
 	s.Mutex().Lock()
 	op.Revision = s.LastSyncRevision
 
@@ -318,10 +298,7 @@ func (r *REPL) enqueueAndSend(s *State, op operation.Operation) error {
 		if err != nil {
 			return err
 		}
-		if r.shouldAddLatency() {
-            r.mu.RLock()
-            latency := r.latency
-            r.mu.RUnlock()
+		if latency := r.state.Latency(); latency > 0 {
             time.Sleep(time.Duration(latency) * time.Millisecond)
         }
 		return s.conn.WriteJSON(msg)

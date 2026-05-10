@@ -13,6 +13,7 @@ type State struct {
 	conn             *websocket.Conn
 	listenerDone     chan struct{}
 	mu               *sync.Mutex
+	latency          int
 	LastSyncRevision document.ID
 	PendingChanges   []operation.Operation
 	SentChanges      []operation.Operation
@@ -45,6 +46,18 @@ func (s *State) SetListenerDone(done chan struct{}) {
 
 func (s *State) ListenerDone() chan struct{} {
 	return s.listenerDone
+}
+
+func (s *State) SetLatency(ms int) {
+    s.mu.Lock()
+    s.latency = ms
+    s.mu.Unlock()
+}
+
+func (s *State) Latency() int {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    return s.latency
 }
 
 func (s *State) Mutex() *sync.Mutex {
