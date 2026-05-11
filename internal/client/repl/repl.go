@@ -45,14 +45,14 @@ func NewREPL(state *State) (*REPL, error) {
 	return repl, nil
 }
 
-func Run() error {
-	repl, err := NewREPL(NewState())
-	if err != nil {
-		return err
-	}
-	defer repl.Close()
-	return repl.Run()
-}
+// func Run() error {
+// 	repl, err := NewREPL(NewState())
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer repl.Close()
+// 	return repl.Run()
+// }
 
 func (r *REPL) Close() {
 	if r.rl != nil {
@@ -145,9 +145,9 @@ func (r *REPL) getLine() (string, error) {
 
 func enqueueAndSend(s *State, op operation.Operation) error {
 	s.Mutex().Lock()
-	op.Revision = s.LastSyncRevision
+	op.Revision = s.lastSyncRevision
 
-	if s.SentChange == (SentChange{}) {
+	if s.IsConnected() && s.SentChange == (SentChange{}) {
 		s.SentChange = SentChange{Op: op, Received: false}
 		s.Mutex().Unlock()
 		msg, err := message.NewMessage(message.MessageTypeOperation, op)
@@ -244,7 +244,7 @@ func listenServer(state *State) {
 				}
  			}
 
- 			state.LastSyncRevision++
+ 			state.lastSyncRevision++
  			state.Mutex().Unlock()
 
  			if isValid {
@@ -260,17 +260,18 @@ func listenServer(state *State) {
  			}
 
  			state.Mutex().Lock()
- 			state.LastSyncRevision = ackMsg.Revision
+ 			state.lastSyncRevision = ackMsg.Revision
 
  			// if len(state.SentChanges) > 0 {
  			if state.SentChange != (SentChange{}) {
+                state.CommitedChanges = append(state.CommitedChanges, state.SentChange.Op)
 				state.SentChange = SentChange{}
  			}
 
  			if len(state.PendingChanges) > 0 {
 				nextOp := state.PendingChanges[0]
 				state.PendingChanges = state.PendingChanges[1:]
-				nextOp.Revision = state.LastSyncRevision
+				nextOp.Revision = state.lastSyncRevision
 				// state.SentChanges = append(state.SentChanges, nextOp)
 				state.SentChange = SentChange{Op: nextOp, Received: false}
 				outMsg, _ := message.NewMessage(message.MessageTypeOperation, nextOp)

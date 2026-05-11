@@ -22,9 +22,10 @@ type State struct {
 	mu                  *sync.RWMutex
 	latency             int
 	promptSymbol         string
-	LastSyncRevision    document.ID
+	lastSyncRevision    document.ID
 	PendingChanges      []operation.Operation
 	SentChange          SentChange
+	CommitedChanges     []operation.Operation
 	Document            document.DocumentRep
 }
 
@@ -36,7 +37,7 @@ func NewState() *State {
 		notifications:      make(chan string),
 		mu:                 &sync.RWMutex{},
 		promptSymbol:       "> ",
-		LastSyncRevision:   0,
+		lastSyncRevision:   0,
 		PendingChanges:     make([]operation.Operation, 0),
 		SentChange:         SentChange{Op: operation.Operation{}, Received: false},
 		Document:           "",
@@ -83,4 +84,69 @@ func (s *State) Latency() int {
 
 func (s *State) Mutex() *sync.RWMutex {
 	return s.mu
+}
+
+func (s *State) AddCommitedChange(op operation.Operation) {
+    s.mu.Lock()
+    s.CommitedChanges = append(s.CommitedChanges, op)
+    s.mu.Unlock()
+}
+
+func (s *State) AddPendingChange(op operation.Operation) {
+    s.mu.Lock()
+    s.PendingChanges = append(s.PendingChanges, op)
+    s.mu.Unlock()
+}
+
+func (s *State) GetFirstPendingChange() (operation.Operation, bool) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    if len(s.PendingChanges) == 0 {
+        return operation.Operation{}, false
+    }
+    return s.PendingChanges[0], true
+}
+
+func (s *State) RemoveFirstPendingChange() {
+    s.mu.Lock()
+    if len(s.PendingChanges) > 0 {
+        s.PendingChanges = s.PendingChanges[1:]
+    }
+    s.mu.Unlock()
+}
+
+func (s *State) SetSentChange(op operation.Operation) {
+    s.mu.Lock()
+    s.SentChange = SentChange{Op: op, Received: false}
+    s.mu.Unlock()
+}
+
+func (s *State) MarkSentChangeReceived() {
+    s.mu.Lock()
+    s.SentChange.Received = true
+    s.mu.Unlock()
+}
+
+func (s *State) ClearSentChange() {
+    s.mu.Lock()
+    s.SentChange = SentChange{Op: operation.Operation{}, Received: false}
+    s.mu.Unlock()
+}
+
+func (s *State) SentChangeIsEmpty() bool {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    return s.SentChange == (SentChange{})
+}
+
+func (s *State) UpdateRevision(rev document.ID) {
+    s.mu.Lock()
+    s.lastSyncRevision = rev
+    s.mu.Unlock()
+}
+
+func (s *State) GetRevision() document.ID {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    return s.lastSyncRevision
 }
