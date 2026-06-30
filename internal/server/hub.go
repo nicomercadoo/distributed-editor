@@ -49,45 +49,10 @@ func (h *Hub) Run() {
 			}
 
 		case dispatchMsg := <-h.Dispatch:
-			op := dispatchMsg.op
-			clientRevision := op.Revision
+			isValid, transformedOp, newRevision := h.DocumentState.ProcessOperation(dispatchMsg.op)
 
-			// 1. ALGORITMO DE CONTROL DE TRANSFORMACIÓN
-			// Comparamos la revisión del cliente con la longitud actual del log del servidor.
-			// Si el cliente está desactualizado, transformamos su operación contra la historia reciente.
-			isValid := true
-			for i := clientRevision; i < len(h.DocumentState.RevisionLog); i++ {
-				appliedOp := h.DocumentState.RevisionLog[i]
-
-				// Llamamos a la Función de Transformación que creaste en el paquete protocol
-				op, isValid = operation.Transform(op, appliedOp)
-
-				// Si la operación se anula (ej. intentar borrar un carácter ya borrado), cortamos el bucle.
-				if !isValid {
-					break
-				}
-			}
-
-			// Si la operación quedó invalidada (No-Op), solo le enviamos el Ack al cliente
-			// para que actualice su revisión, pero no la guardamos ni hacemos broadcast.
-			if !isValid {
-				ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: len(h.DocumentState.RevisionLog)})
-				if err == nil {
-					select {
-					case dispatchMsg.client.send <- ackMsg:
-					default:
-					}
-				}
-				continue // Pasamos a escuchar el siguiente mensaje
-			}
-
-			// 2. APLICAR Y GUARDAR
-			// La operación superó las transformaciones. La guardamos como la verdad absoluta.
-			h.DocumentState.RevisionLog = append(h.DocumentState.RevisionLog, op)
-			newRevision := len(h.DocumentState.RevisionLog)
-
-			// 3. CONFIRMAR AL AUTOR (ACK)
-			// Le avisamos al cliente que su operación fue aceptada y le damos el nuevo número de revisión.
+			// CONFIRMAR AL AUTOR (ACK)
+			// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
 			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: newRevision})
 			if err == nil {
 				select {
@@ -96,9 +61,14 @@ func (h *Hub) Run() {
 				}
 			}
 
-			// 4. BROADCAST A LOS DEMÁS
-			// IMPORTANTE: Enviamos la operación TRANSFORMADA, no la original.
-			outMsg, err := message.NewMessage(message.MessageTypeOperation, op)
+			// Si la operación fue invalidada, cortamos acá y no hacemos broadcast
+			if !isValid {
+				continue
+			}
+
+			// BROADCAST A LOS DEMÁS
+			// Enviamos la operación TRANSFORMADA a todos menos al autor.
+			outMsg, err := message.NewMessage(message.MessageTypeOperation, transformedOp)
 			if err == nil {
 				for client := range h.clients {
 					if client == dispatchMsg.client {

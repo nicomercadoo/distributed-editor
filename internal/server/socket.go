@@ -12,9 +12,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Instancia global del único documento
-// var GlobalHub = NewHub()
-
 func HandleConnection(hub *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -24,7 +21,7 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 		}
 
 		client := &Client{
-			hub:  hub, // Usamos el hub inyectado
+			hub:  hub,
 			conn: conn,
 			send: make(chan message.Message, 256),
 		}
