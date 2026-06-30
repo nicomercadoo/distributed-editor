@@ -38,7 +38,7 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
-		c.hub.Broadcast <- broadcastMsg{client: c, op: op}
+		c.hub.Dispatch <- broadcastMsg{client: c, op: op}
 	}
 }
 

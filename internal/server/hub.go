@@ -6,14 +6,14 @@ import (
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
-type broadcastMsg struct {
+type dispatchMsg struct {
 	client *Client
 	op     operation.Operation
 }
 
 type Hub struct {
 	clients       map[*Client]bool
-	Broadcast     chan broadcastMsg
+	Dispatch      chan dispatchMsg
 	Register      chan *Client
 	Unregister    chan *Client
 	DocumentState *DocumentServerState
@@ -21,7 +21,7 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Broadcast:     make(chan broadcastMsg),
+		Dispatch:      make(chan dispatchMsg),
 		Register:      make(chan *Client),
 		Unregister:    make(chan *Client),
 		clients:       make(map[*Client]bool),
@@ -48,8 +48,8 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 
-		case bMsg := <-h.Broadcast:
-			op := bMsg.op
+		case dispatchMsg := <-h.Dispatch:
+			op := dispatchMsg.op
 			clientRevision := op.Revision
 
 			// 1. ALGORITMO DE CONTROL DE TRANSFORMACIÓN
@@ -74,7 +74,7 @@ func (h *Hub) Run() {
 				ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: len(h.DocumentState.RevisionLog)})
 				if err == nil {
 					select {
-					case bMsg.client.send <- ackMsg:
+					case dispatchMsg.client.send <- ackMsg:
 					default:
 					}
 				}
@@ -91,7 +91,7 @@ func (h *Hub) Run() {
 			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: newRevision})
 			if err == nil {
 				select {
-				case bMsg.client.send <- ackMsg:
+				case dispatchMsg.client.send <- ackMsg:
 				default:
 				}
 			}
@@ -101,7 +101,7 @@ func (h *Hub) Run() {
 			outMsg, err := message.NewMessage(message.MessageTypeOperation, op)
 			if err == nil {
 				for client := range h.clients {
-					if client == bMsg.client {
+					if client == dispatchMsg.client {
 						continue // No le enviamos la operación al autor
 					}
 
