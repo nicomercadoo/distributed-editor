@@ -7,6 +7,8 @@ import (
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
+type MessageType = string
+
 const (
 	MessageTypeOperation = "operation"
 	MessageTypeAck       = "ack"
@@ -18,7 +20,7 @@ type Message struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
-func NewMessage(messageType string, payload any) (Message, error) {
+func NewMessage(messageType MessageType, payload any) (Message, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return Message{}, err

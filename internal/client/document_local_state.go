@@ -4,9 +4,9 @@ import "proyecto-final-redes/internal/protocol/document"
 
 type DocumentLocalState struct {
 	LastSyncRevision document.ID
-	PendingChanges  []operation.Operation 
-	SentChanges     []operation.Operation 
-	Document        document.DocumentRep  
+	PendingChanges  []operation.Operation
+	SentChanges     []operation.Operation
+	Document        document.DocumentRep
 }
 
 func NewDocumentLocalState() *DocumentLocalState {
