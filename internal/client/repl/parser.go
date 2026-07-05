@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+type Command struct {
+	Name string
+	Args []string
+	Raw  string
+}
+
 func Parse(line string) (Command, error) {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {

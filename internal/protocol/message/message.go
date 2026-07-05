@@ -14,10 +14,11 @@ const (
 	MessageTypeAck       = "ack"
 )
 
-// Message envuelve distintos tipos de mensajes en el mismo WebSocket.
 type Message struct {
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload"`
+	Type     string          `json:"type"`
+	SeqNum   int             `json:"seqNum,omitempty"`
+	Revision int             `json:"revision,omitempty"`
+	Payload  json.RawMessage `json:"payload"`
 }
 
 func NewMessage(messageType MessageType, payload any) (Message, error) {
