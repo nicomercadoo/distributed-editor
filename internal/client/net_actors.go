@@ -12,31 +12,31 @@ import (
 type Sender struct {
 	Conn       *websocket.Conn
 	Outbound   <-chan operation.Operation
-	LatencyCmd <-chan int
 	CancelConn context.CancelFunc
+	Manager    *ConnectionManager
 }
 
 func (s *Sender) Run(ctx context.Context) {
 	defer s.CancelConn()
-	latencyMs := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case lat := <-s.LatencyCmd:
-			latencyMs = lat
 		case op := <-s.Outbound:
 			msg, err := message.NewMessage(message.MessageTypeOperation, op)
 			if err != nil {
 				return
 			}
-			if latencyMs > 0 {
+			
+			lat := s.Manager.GetLatency()
+			if lat > 0 {
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(time.Duration(latencyMs) * time.Millisecond):
+				case <-time.After(lat):
 				}
 			}
+			
 			if err := s.Conn.WriteJSON(msg); err != nil {
 				return
 			}
@@ -50,6 +50,7 @@ type Listener struct {
 	Acks          chan<- int
 	CancelConn    context.CancelFunc
 	Notifications chan<- string
+	Manager       *ConnectionManager
 }
 
 func (l *Listener) Run(ctx context.Context) {
@@ -57,6 +58,10 @@ func (l *Listener) Run(ctx context.Context) {
 
 	var expectedSeqNum int
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+
 		var msg message.Message
 		if err := l.Conn.ReadJSON(&msg); err != nil {
 			return
@@ -70,6 +75,15 @@ func (l *Listener) Run(ctx context.Context) {
 			return
 		}
 		expectedSeqNum = msg.SeqNum + 1
+
+		lat := l.Manager.GetLatency()
+		if lat > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(lat):
+			}
+		}
 
 		switch msg.Type {
 		case message.MessageTypeOperation:

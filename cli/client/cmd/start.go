@@ -27,9 +27,6 @@ func newStartCmd() *cobra.Command {
 			acks := make(chan int, 100)
 			outbound := make(chan operation.Operation, 100)
 
-			connectCmd := make(chan string, 1)
-			disconnectCmd := make(chan struct{}, 1)
-			latencyCmd := make(chan int, 1)
 			notifications := make(chan string, 100)
 
 			syncEngine := &client.SyncEngine{
@@ -40,21 +37,16 @@ func newStartCmd() *cobra.Command {
 				Notifications: notifications,
 			}
 
-			connManager := &client.ConnectionManager{
-				ConnectCmd:    connectCmd,
-				DisconnectCmd: disconnectCmd,
-				LatencyCmd:    latencyCmd,
-				RemoteOps:     remoteOps,
-				Acks:          acks,
-				Outbound:      outbound,
-				Notifications: notifications,
+			connManager := client.NewConnectionManager(ctx, remoteOps, acks, outbound, notifications)
+
+			appClient := &client.AppClient{
+				SyncEngine:        syncEngine,
+				ConnectionManager: connManager,
 			}
 
 			r, err := repl.NewREPL(
 				localOps,
-				connectCmd,
-				disconnectCmd,
-				latencyCmd,
+				appClient,
 				notifications,
 			)
 			if err != nil {
@@ -62,7 +54,6 @@ func newStartCmd() *cobra.Command {
 			}
 
 			go syncEngine.Run(ctx)
-			go connManager.Run(ctx)
 
 			// Graceful shutdown with OS signals
 			sigCh := make(chan os.Signal, 1)
@@ -70,7 +61,6 @@ func newStartCmd() *cobra.Command {
 			go func() {
 				<-sigCh
 				cancel()
-				r.Run(ctx) // well, r.Run is blocking, so we cancel and the program will exit
 			}()
 
 			r.Run(ctx)

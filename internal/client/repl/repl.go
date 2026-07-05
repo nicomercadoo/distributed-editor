@@ -7,26 +7,24 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/chzyer/readline"
+	"proyecto-final-redes/internal/client"
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type REPL struct {
 	rl            *readline.Instance
 	LocalOps      chan<- operation.Operation
-	ConnectCmd    chan<- string
-	DisconnectCmd chan<- struct{}
-	LatencyCmd    chan<- int
+	Ctrl          client.AppController
 	Notifications <-chan string
 }
 
 func NewREPL(
 	localOps chan<- operation.Operation,
-	connectCmd chan<- string,
-	disconnectCmd chan<- struct{},
-	latencyCmd chan<- int,
+	ctrl client.AppController,
 	notifications <-chan string,
 ) (*REPL, error) {
 	config := &readline.Config{
@@ -43,9 +41,7 @@ func NewREPL(
 	return &REPL{
 		rl:            rl,
 		LocalOps:      localOps,
-		ConnectCmd:    connectCmd,
-		DisconnectCmd: disconnectCmd,
-		LatencyCmd:    latencyCmd,
+		Ctrl:          ctrl,
 		Notifications: notifications,
 	}, nil
 }
@@ -98,15 +94,12 @@ func (r *REPL) handleCommand(cmd string, args []string) error {
 		if len(args) < 1 {
 			return errors.New("uso: connect <uri>")
 		}
-		select {
-		case r.ConnectCmd <- args[0]:
-		default:
-			return errors.New("comando de conexión ocupado")
+		if err := r.Ctrl.Connect(args[0]); err != nil {
+			return err
 		}
 	case "disconnect":
-		select {
-		case r.DisconnectCmd <- struct{}{}:
-		default:
+		if err := r.Ctrl.Disconnect(); err != nil {
+			return err
 		}
 	case "latency":
 		if len(args) < 1 {
@@ -116,10 +109,21 @@ func (r *REPL) handleCommand(cmd string, args []string) error {
 		if err != nil || ms < 0 {
 			return errors.New("latencia invalida")
 		}
-		select {
-		case r.LatencyCmd <- ms:
-		default:
+		r.Ctrl.SetLatency(time.Duration(ms) * time.Millisecond)
+		fmt.Printf("Latencia configurada a %d ms\n", ms)
+	case "status":
+		connected := "No conectado"
+		if r.Ctrl.IsConnected() {
+			connected = "Conectado"
 		}
+		lat := r.Ctrl.GetLatency()
+		fmt.Printf("Estado: %s\nLatencia: %s\n", connected, lat)
+	case "doc":
+		doc := r.Ctrl.GetDocument()
+		rev := r.Ctrl.GetRevision()
+		pending := r.Ctrl.GetPendingCount()
+		inflight := r.Ctrl.HasInFlight()
+		fmt.Printf("Documento: %q\nRevisión: %d\nOperaciones pendientes: %d\nEn vuelo: %v\n", doc, rev, pending, inflight)
 	case "insert":
 		if len(args) < 2 {
 			return errors.New("uso: insert <char> <pos>")
@@ -175,6 +179,8 @@ func printHelp() {
     insert <char> <pos>     Envia una operacion de insercion
     delete <pos>            Envia una operacion de borrado
     latency <ms>            Establece latencia artificial
+    status                  Muestra el estado de la conexion y latencia
+    doc                     Muestra el documento y estado de la sincronizacion
     help                    Muestra esta ayuda
     exit                    Sale del REPL
     `)
@@ -185,6 +191,8 @@ func newCompleter() *readline.PrefixCompleter {
 		readline.PcItem("connect"),
 		readline.PcItem("disconnect"),
 		readline.PcItem("latency"),
+		readline.PcItem("status"),
+		readline.PcItem("doc"),
 		readline.PcItem("insert"),
 		readline.PcItem("delete"),
 		readline.PcItem("help"),

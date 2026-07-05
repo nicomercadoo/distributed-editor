@@ -3,12 +3,14 @@ package client
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"proyecto-final-redes/internal/protocol/document"
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type SyncEngine struct {
+	mu       sync.RWMutex
 	document document.DocumentRep
 	revision document.ID
 	pending  []operation.Operation
@@ -43,6 +45,7 @@ func (e *SyncEngine) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case op := <-e.LocalOps:
+			e.mu.Lock()
 			// Aplicar optimista
 			e.document = applyOperation(e.document, op)
 			op.Revision = e.revision
@@ -54,12 +57,15 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			} else {
 				e.pending = append(e.pending, op)
 			}
+			docStr := string(e.document)
+			e.mu.Unlock()
 			select {
-			case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: %s", op.Op, e.document):
+			case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: %s", op.Op, docStr):
 			default:
 			}
 
 		case op := <-e.RemoteOps:
+			e.mu.Lock()
 			isValid := true
 			if e.inFlight != nil {
 				localOp := *e.inFlight
@@ -78,14 +84,20 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			}
 			if isValid {
 				e.document = applyOperation(e.document, op)
+			}
+			e.revision++
+			docStr := string(e.document)
+			e.mu.Unlock()
+			
+			if isValid {
 				select {
-				case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, e.document):
+				case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, docStr):
 				default:
 				}
 			}
-			e.revision++
 
 		case ackRev := <-e.Acks:
+			e.mu.Lock()
 			e.revision = ackRev
 			e.inFlight = nil
 			if len(e.pending) > 0 {
@@ -95,10 +107,36 @@ func (e *SyncEngine) Run(ctx context.Context) {
 				e.inFlight = &nextOp
 				e.Outbound <- nextOp
 			}
+			rev := e.revision
+			e.mu.Unlock()
 			select {
-			case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", e.revision):
+			case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", rev):
 			default:
 			}
 		}
 	}
+}
+
+func (e *SyncEngine) GetDocument() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return string(e.document)
+}
+
+func (e *SyncEngine) GetRevision() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.revision
+}
+
+func (e *SyncEngine) GetPendingCount() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return len(e.pending)
+}
+
+func (e *SyncEngine) HasInFlight() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.inFlight != nil
 }
