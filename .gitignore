@@ -31,3 +31,6 @@ go.work.sum
 # .idea/
 .vscode/
 .zed/
+
+# Project Specific
+.client_history
