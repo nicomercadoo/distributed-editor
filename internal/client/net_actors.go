@@ -16,6 +16,15 @@ type Sender struct {
 	Manager    *ConnectionManager
 }
 
+func NewSender(conn *websocket.Conn, outbound <-chan operation.Operation, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
+	return &Sender{
+		Conn:       conn,
+		Outbound:   outbound,
+		CancelConn: cancel,
+		Manager:    manager,
+	}
+}
+
 func (s *Sender) Run(ctx context.Context) {
 	defer s.CancelConn()
 	for {
@@ -51,6 +60,17 @@ type Listener struct {
 	CancelConn    context.CancelFunc
 	Notifications chan<- string
 	Manager       *ConnectionManager
+}
+
+func NewListener(conn *websocket.Conn, remoteOps chan<- operation.Operation, acks chan<- int, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
+	return &Listener{
+		Conn:          conn,
+		RemoteOps:     remoteOps,
+		Acks:          acks,
+		CancelConn:    cancel,
+		Notifications: notifs,
+		Manager:       manager,
+	}
 }
 
 func (l *Listener) Run(ctx context.Context) {

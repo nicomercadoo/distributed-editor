@@ -29,20 +29,9 @@ func newStartCmd() *cobra.Command {
 
 			notifications := make(chan string, 100)
 
-			syncEngine := &client.SyncEngine{
-				LocalOps:      localOps,
-				RemoteOps:     remoteOps,
-				Acks:          acks,
-				Outbound:      outbound,
-				Notifications: notifications,
-			}
-
+			syncEngine := client.NewSyncEngine(localOps, remoteOps, acks, outbound, notifications)
 			connManager := client.NewConnectionManager(ctx, remoteOps, acks, outbound, notifications)
-
-			appClient := &client.AppClient{
-				SyncEngine:        syncEngine,
-				ConnectionManager: connManager,
-			}
+			appClient := client.NewAppClient(syncEngine, connManager)
 
 			r, err := repl.NewREPL(
 				localOps,

@@ -24,6 +24,22 @@ type SyncEngine struct {
 	Notifications chan<- string
 }
 
+func NewSyncEngine(
+	localOps <-chan operation.Operation,
+	remoteOps <-chan operation.Operation,
+	acks <-chan int,
+	outbound chan<- operation.Operation,
+	notifications chan<- string,
+) *SyncEngine {
+	return &SyncEngine{
+		LocalOps:      localOps,
+		RemoteOps:     remoteOps,
+		Acks:          acks,
+		Outbound:      outbound,
+		Notifications: notifications,
+	}
+}
+
 func applyOperation(doc document.DocumentRep, op operation.Operation) document.DocumentRep {
 	if op.Op == operation.Insert {
 		if op.Position > len(doc) {

@@ -56,20 +56,8 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.conn = c
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
-	sender := &Sender{
-		Conn:       m.conn,
-		Outbound:   m.Outbound,
-		CancelConn: m.cancelConn,
-		Manager:    m,
-	}
-	listener := &Listener{
-		Conn:          m.conn,
-		RemoteOps:     m.RemoteOps,
-		Acks:          m.Acks,
-		CancelConn:    m.cancelConn,
-		Notifications: m.Notifications,
-		Manager:       m,
-	}
+	sender := NewSender(m.conn, m.Outbound, m.cancelConn, m)
+	listener := NewListener(m.conn, m.RemoteOps, m.Acks, m.cancelConn, m.Notifications, m)
 
 	go sender.Run(m.activeConnCtx)
 	go listener.Run(m.activeConnCtx)
