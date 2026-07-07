@@ -120,8 +120,12 @@ func (r *REPL) notificationServer(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-r.Notifications:
-			r.rl.Write([]byte("[!] " + msg + "\n"))
-			r.rl.Refresh()
+            // \r       : Mueve el cursor al inicio de la línea física.
+			// \033[2K  : Limpia toda la línea (borra el prompt residual).
+			// [!] msg  : Tu mensaje.
+			// \n       : Salto de línea.
+			// r.rl.Stdout() imprimirá esto y luego redibujará el prompt limpio debajo.
+		    fmt.Fprintf(r.rl.Stdout(), "\r\033[2K[!] %s\n", msg)
 		}
 	}
 }
