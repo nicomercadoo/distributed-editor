@@ -45,12 +45,12 @@ func (m *ConnectionManager) Connect(uri string) error {
 	defer m.mu.Unlock()
 
 	if m.conn != nil {
-		return errors.New("ya hay una conexión activa")
+		return errors.New("Ya hay una conexión activa.")
 	}
 
 	c, _, err := websocket.DefaultDialer.Dial(uri, nil)
 	if err != nil {
-		return fmt.Errorf("error al conectar: %w", err)
+		return fmt.Errorf("Error al conectar: %w", err)
 	}
 
 	m.conn = c

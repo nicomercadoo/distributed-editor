@@ -89,7 +89,7 @@ func (l *Listener) Run(ctx context.Context) {
 
 		if msg.SeqNum != 0 && msg.SeqNum != expectedSeqNum {
 			select {
-			case l.Notifications <- "Error: Secuencia de paquete invalida":
+			case l.Notifications <- "Error: Secuencia de paquete invalida.":
 			default:
 			}
 			return
@@ -116,7 +116,7 @@ func (l *Listener) Run(ctx context.Context) {
 				}
 			} else {
 				select {
-				case l.Notifications <- "Operacion invalida recibida del servidor":
+				case l.Notifications <- "Operacion invalida recibida del servidor.":
 				default:
 				}
 			}
@@ -130,13 +130,13 @@ func (l *Listener) Run(ctx context.Context) {
 				}
 			} else {
 				select {
-				case l.Notifications <- "Ack invalido recibido del servidor":
+				case l.Notifications <- "Ack invalido recibido del servidor.":
 				default:
 				}
 			}
 		default:
 			select {
-			case l.Notifications <- "Tipo de mensaje desconocido recibido del servidor":
+			case l.Notifications <- "Tipo de mensaje desconocido recibido del servidor.":
 			default:
 			}
 		}

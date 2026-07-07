@@ -60,7 +60,7 @@ func (r *REPL) Run(ctx context.Context) {
 			if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
 				return
 			}
-			fmt.Println("error:", err)
+			fmt.Println("\033[31mError:\033[0m", err)
 			continue
 		}
 
@@ -78,7 +78,7 @@ func (r *REPL) Run(ctx context.Context) {
 			if errors.Is(err, io.EOF) {
 				return
 			}
-			fmt.Println("error:", err)
+			fmt.Println("\033[31mError:\033[0m", err)
 			onErrorStatus = true
 		} else {
 			onErrorStatus = false
@@ -109,7 +109,7 @@ func(r *REPL) setPrompt(onErrorStatus bool) {
 func (r *REPL) handleCommand(cmd Command) error {
 	handler, ok := Handlers[cmd.Name]
 	if !ok {
-		return errors.New("comando desconocido. usa 'help'")
+		return errors.New("Comando desconocido. Usa 'help'.")
 	}
 	return handler(cmd, r)
 }

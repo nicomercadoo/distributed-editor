@@ -25,7 +25,7 @@ var Handlers = map[string]Handler{
 
 	"connect": func(cmd Command, r *REPL) error {
 		if len(cmd.Args) < 1 {
-			return errors.New("uso: connect <uri>")
+			return errors.New("Uso: connect <uri>")
 		}
 		if err := r.Ctrl.Connect(cmd.Args[0]); err != nil {
 			return err
@@ -42,14 +42,13 @@ var Handlers = map[string]Handler{
 
 	"latency": func(cmd Command, r *REPL) error {
 		if len(cmd.Args) < 1 {
-			return errors.New("uso: latency <duracion>")
+			return errors.New("Uso: latency <duracion>")
 		}
 		d, err := time.ParseDuration(cmd.Args[0])
 		if err != nil || d < 0 {
-			return errors.New("latencia invalida")
+			return errors.New("Latencia invalida.")
 		}
 		r.Ctrl.SetLatency(d)
-		fmt.Printf("Latencia configurada a %s\n", d)
 		return nil
 	},
 
@@ -74,14 +73,14 @@ var Handlers = map[string]Handler{
 
 	"insert": func(cmd Command, r *REPL) error {
 		if len(cmd.Args) < 2 {
-			return errors.New("uso: insert <char> <pos>")
+			return errors.New("Uso: insert <char> <pos>")
 		}
 		if utf8.RuneCountInString(cmd.Args[0]) != 1 {
-			return errors.New("insert requiere un solo caracter")
+			return errors.New("insert requiere un solo caracter.")
 		}
 		pos, err := strconv.Atoi(cmd.Args[1])
 		if err != nil || pos < 0 {
-			return errors.New("posicion invalida")
+			return errors.New("Posición invalida.")
 		}
 		op := operation.Operation{
 			Op:       operation.Insert,
@@ -94,11 +93,11 @@ var Handlers = map[string]Handler{
 
 	"delete": func(cmd Command, r *REPL) error {
 		if len(cmd.Args) < 1 {
-			return errors.New("uso: delete <pos>")
+			return errors.New("Uso: delete <pos>")
 		}
 		pos, err := strconv.Atoi(cmd.Args[0])
 		if err != nil || pos < 0 {
-			return errors.New("posicion invalida")
+			return errors.New("Posición invalida.")
 		}
 		op := operation.Operation{
 			Op:       operation.Delete,
