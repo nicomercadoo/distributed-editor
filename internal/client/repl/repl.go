@@ -95,7 +95,7 @@ func(r *REPL) setPrompt(onErrorStatus bool) {
    	promptLatency := ""
    	latency := r.Ctrl.GetLatency()
    	if latency > 0 {
-  		promptLatency = fmt.Sprintf("\033[33m[%dms]\033[0m", latency)
+  		promptLatency = fmt.Sprintf("\033[33m[%s]\033[0m", latency)
    	}
 
 	promptSymbol := "> "
@@ -128,15 +128,15 @@ func (r *REPL) notificationServer(ctx context.Context) {
 
 func printHelp() {
 	fmt.Println(`Comandos disponibles:
-    connect <uri>           Conecta al servidor (ej. ws://localhost:8080/ws)
-    disconnect              Desconecta del servidor
-    insert <char> <pos>     Envia una operacion de insercion
-    delete <pos>            Envia una operacion de borrado
-    latency <ms>            Establece latencia artificial
-    status                  Muestra el estado de la conexion y latencia
-    doc                     Muestra el documento y estado de la sincronizacion
-    help                    Muestra esta ayuda
-    exit                    Sale del REPL`)
+    connect <uri>               Conecta al servidor (ej. ws://localhost:8080/ws)
+    disconnect                  Desconecta del servidor
+    insert <char> <pos>         Envia una operacion de insercion
+    delete <pos>                Envia una operacion de borrado
+    latency <duracion><unit>    Establece latencia artificial (unidades: ns, us, ms, s, m, h)
+    status                      Muestra el estado de la conexion y latencia
+    doc                         Muestra el documento y estado de la sincronizacion
+    help                        Muestra esta ayuda
+    exit                        Sale del REPL`)
 }
 
 func newCompleter() *readline.PrefixCompleter {

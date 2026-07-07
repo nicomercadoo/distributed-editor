@@ -42,15 +42,14 @@ var Handlers = map[string]Handler{
 
 	"latency": func(cmd Command, r *REPL) error {
 		if len(cmd.Args) < 1 {
-			return errors.New("uso: latency <ms>")
+			return errors.New("uso: latency <duracion>")
 		}
-		ms, err := strconv.Atoi(cmd.Args[0])
-		if err != nil || ms < 0 {
+		d, err := time.ParseDuration(cmd.Args[0])
+		if err != nil || d < 0 {
 			return errors.New("latencia invalida")
 		}
-
-		r.Ctrl.SetLatency(time.Duration(ms) * time.Millisecond)
-		fmt.Printf("Latencia configurada a %d ms\n", ms)
+		r.Ctrl.SetLatency(d)
+		fmt.Printf("Latencia configurada a %s\n", d)
 		return nil
 	},
 
