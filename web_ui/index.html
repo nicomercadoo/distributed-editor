@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collab Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        textarea { resize: none; outline: none; }
+        textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        
+        /* Custom scrollbar for textarea */
+        textarea::-webkit-scrollbar { width: 8px; }
+        textarea::-webkit-scrollbar-track { background: transparent; }
+        textarea::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
+    
+    <div class="glass rounded-2xl shadow-2xl p-6 w-full max-w-5xl h-[85vh] flex flex-col gap-4 relative overflow-hidden">
+        <!-- Glow effects -->
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-700/50 z-10 gap-4">
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">Collaborative Editor</h1>
+                <div class="flex items-center gap-3 mt-1 text-sm font-medium text-slate-400">
+                    <span class="flex items-center gap-2 bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700/50">
+                        <div id="conn-indicator" class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
+                        <span id="conn-text">Disconnected</span>
+                    </span>
+                    <span class="bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700/50">
+                        Rev: <span id="rev-text" class="text-blue-400">0</span>
+                    </span>
+                    <span class="bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700/50">
+                        Pending: <span id="pending-text" class="text-yellow-400">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <input type="text" id="ws-uri" value="ws://localhost:8080/ws" class="flex-1 sm:w-64 px-4 py-2 bg-slate-900/80 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 transition-colors shadow-inner" placeholder="ws://...">
+                <button id="btn-connect" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95">Connect</button>
+                <button id="btn-disconnect" class="px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg transition-all shadow-[0_0_15px_rgba(220,38,38,0.3)] hover:shadow-[0_0_20px_rgba(220,38,38,0.5)] active:scale-95 hidden">Disconnect</button>
+            </div>
+        </header>
+
+        <main class="flex-1 flex flex-col relative z-10 group">
+            <textarea id="editor" class="flex-1 w-full p-5 bg-slate-900/60 border border-slate-700/50 rounded-xl text-slate-200 font-mono text-[15px] leading-relaxed transition-all shadow-inner" spellcheck="false" placeholder="Start typing..."></textarea>
+            
+            <!-- Sync Indicator -->
+            <div id="sync-bar" class="absolute bottom-4 right-4 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 text-xs font-semibold rounded-full border border-yellow-500/20 flex items-center gap-2 opacity-0 transition-opacity duration-300 pointer-events-none shadow-[0_0_10px_rgba(234,179,8,0.1)]">
+                <div class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-ping"></div>
+                Syncing...
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const wsUriInput = document.getElementById('ws-uri');
+        const btnConnect = document.getElementById('btn-connect');
+        const btnDisconnect = document.getElementById('btn-disconnect');
+        const editor = document.getElementById('editor');
+        const connIndicator = document.getElementById('conn-indicator');
+        const connText = document.getElementById('conn-text');
+        const revText = document.getElementById('rev-text');
+        const pendingText = document.getElementById('pending-text');
+        const syncBar = document.getElementById('sync-bar');
+
+        let ws;
+        let lastKnownDoc = "";
+        let isLocalUpdate = false;
+        let updateTimeout;
+
+        function connectLocal() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onopen = () => {
+                console.log("Connected to local bridge");
+            };
+
+            ws.onmessage = (e) => {
+                const state = JSON.parse(e.data);
+                
+                revText.textContent = state.revision;
+                pendingText.textContent = state.pendingCount;
+                
+                if (state.isConnected) {
+                    connIndicator.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]';
+                    connText.textContent = "Connected";
+                    btnConnect.classList.add('hidden');
+                    btnDisconnect.classList.remove('hidden');
+                } else {
+                    connIndicator.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
+                    connText.textContent = "Disconnected";
+                    btnConnect.classList.remove('hidden');
+                    btnDisconnect.classList.add('hidden');
+                }
+
+                if (state.hasInFlight || state.pendingCount > 0) {
+                    syncBar.classList.remove('opacity-0');
+                } else {
+                    syncBar.classList.add('opacity-0');
+                }
+
+                // Protect cursor position while typing
+                if (state.document !== editor.value && !isLocalUpdate) {
+                    const start = editor.selectionStart;
+                    const end = editor.selectionEnd;
+                    const lenDiff = state.document.length - editor.value.length;
+                    
+                    editor.value = state.document;
+                    lastKnownDoc = state.document;
+                    
+                    // Restore cursor if it makes sense
+                    const newStart = Math.max(0, Math.min(start + lenDiff, state.document.length));
+                    const newEnd = Math.max(0, Math.min(end + lenDiff, state.document.length));
+                    editor.setSelectionRange(newStart, newEnd);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("Disconnected from local bridge");
+                setTimeout(connectLocal, 1000); // auto-reconnect to Go server
+            };
+        }
+
+        connectLocal();
+
+        btnConnect.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "cmd_connect", uri: wsUriInput.value }));
+            }
+        };
+
+        btnDisconnect.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "cmd_disconnect" }));
+            }
+        };
+
+        function computeDiff(oldStr, newStr) {
+            let start = 0;
+            while (start < oldStr.length && start < newStr.length && oldStr[start] === newStr[start]) {
+                start++;
+            }
+            
+            let oldEnd = oldStr.length - 1;
+            let newEnd = newStr.length - 1;
+            while (oldEnd >= start && newEnd >= start && oldStr[oldEnd] === newStr[newEnd]) {
+                oldEnd--;
+                newEnd--;
+            }
+            
+            let deleted = oldStr.slice(start, oldEnd + 1);
+            let inserted = newStr.slice(start, newEnd + 1);
+            
+            return { pos: start, deleted: deleted.length, inserted: inserted };
+        }
+
+        editor.addEventListener('input', (e) => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                // Prevent editing if we are not connected to local Go backend?
+                // It will reconnect anyway, so it's fine.
+                lastKnownDoc = editor.value;
+                return;
+            }
+            
+            isLocalUpdate = true;
+            clearTimeout(updateTimeout);
+            
+            const diff = computeDiff(lastKnownDoc, editor.value);
+            
+            // Delete first (multiple operations at the same position)
+            for (let i = 0; i < diff.deleted; i++) {
+                ws.send(JSON.stringify({ type: "delete", pos: diff.pos }));
+            }
+            
+            // Then Insert (one bulk operation)
+            if (diff.inserted.length > 0) {
+                ws.send(JSON.stringify({ type: "insert", pos: diff.pos, char: diff.inserted }));
+            }
+            
+            lastKnownDoc = editor.value;
+            
+            // Release the lock after a small delay
+            updateTimeout = setTimeout(() => {
+                isLocalUpdate = false;
+            }, 50);
+        });
+    </script>
+</body>
+</html>

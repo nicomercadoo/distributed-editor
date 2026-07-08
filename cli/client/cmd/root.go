@@ -24,6 +24,7 @@ func init() {
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 10*time.Second, "Timeout de operaciones de red")
 
 	rootCmd.AddCommand(newStartCmd())
+	rootCmd.AddCommand(newStartWebCmd())
 	rootCmd.AddCommand(newWatchCmd())
 	rootCmd.AddCommand(newVersionCmd())
 }
