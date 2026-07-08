@@ -61,75 +61,85 @@ func (e *SyncEngine) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case op := <-e.LocalOps:
-			e.mu.Lock()
-			// Aplicar optimista
-			e.document = applyOperation(e.document, op)
-			op.Revision = e.revision
-
-			if e.inFlight == nil {
-				inFlightOp := op
-				e.inFlight = &inFlightOp
-				e.Outbound <- inFlightOp
-			} else {
-				e.pending = append(e.pending, op)
-			}
-			docStr := string(e.document)
-			e.mu.Unlock()
-			select {
-			case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: %s", op.Op, docStr):
-			default:
-			}
-
+			e.handleLocalOp(op)
 		case op := <-e.RemoteOps:
-			e.mu.Lock()
-			isValid := true
-			if e.inFlight != nil {
-				localOp := *e.inFlight
-				*e.inFlight, _ = operation.Transform(localOp, op)
-				op, isValid = operation.Transform(op, localOp)
-			}
-			if isValid {
-				for i := range e.pending {
-					localOp := e.pending[i]
-					e.pending[i], _ = operation.Transform(localOp, op)
-					op, isValid = operation.Transform(op, localOp)
-					if !isValid {
-						break
-					}
-				}
-			}
-			if isValid {
-				e.document = applyOperation(e.document, op)
-			}
-			e.revision++
-			docStr := string(e.document)
-			e.mu.Unlock()
-			
-			if isValid {
-				select {
-				case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, docStr):
-				default:
-				}
-			}
-
+			e.handleRemoteOp(op)
 		case ackRev := <-e.Acks:
-			e.mu.Lock()
-			e.revision = ackRev
-			e.inFlight = nil
-			if len(e.pending) > 0 {
-				nextOp := e.pending[0]
-				e.pending = e.pending[1:]
-				nextOp.Revision = e.revision
-				e.inFlight = &nextOp
-				e.Outbound <- nextOp
-			}
-			rev := e.revision
-			e.mu.Unlock()
-			select {
-			case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", rev):
-			default:
+			e.handleAck(ackRev)
+		}
+	}
+}
+
+func (e *SyncEngine) handleLocalOp(op operation.Operation) {
+	e.mu.Lock()
+	// Aplicar optimista
+	e.document = applyOperation(e.document, op)
+	op.Revision = e.revision
+
+	if e.inFlight == nil {
+		inFlightOp := op
+		e.inFlight = &inFlightOp
+		e.Outbound <- inFlightOp
+	} else {
+		e.pending = append(e.pending, op)
+	}
+	docStr := string(e.document)
+	e.mu.Unlock()
+	select {
+	case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: %s", op.Op, docStr):
+	default:
+	}
+}
+
+func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
+	e.mu.Lock()
+	isValid := true
+	if e.inFlight != nil {
+		localOp := *e.inFlight
+		*e.inFlight, _ = operation.Transform(localOp, op)
+		op, isValid = operation.Transform(op, localOp)
+	}
+	if isValid {
+		for i := range e.pending {
+			localOp := e.pending[i]
+			e.pending[i], _ = operation.Transform(localOp, op)
+			op, isValid = operation.Transform(op, localOp)
+			if !isValid {
+				break
 			}
 		}
+	}
+	if isValid {
+		e.document = applyOperation(e.document, op)
+	}
+	e.revision++
+	docStr := string(e.document)
+	e.mu.Unlock()
+	
+	if isValid {
+		select {
+		case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, docStr):
+		default:
+		}
+	}
+}
+
+func (e *SyncEngine) handleAck(ackRev int) {
+	e.mu.Lock()
+	e.revision = ackRev
+	e.inFlight = nil
+	if len(e.pending) > 0 {
+		nextOp := e.pending[0]
+		e.pending = e.pending[1:]
+		nextOp.Revision = e.revision
+		e.inFlight = &nextOp
+		e.Outbound <- nextOp
+	}
+	rev := e.revision
+	e.mu.Unlock()
+	select {
+	case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", rev):
+	default:
 	}
 }
 
