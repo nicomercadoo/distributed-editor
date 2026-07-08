@@ -34,3 +34,4 @@ go.work.sum
 
 # Project Specific
 .client_history
+bin/
