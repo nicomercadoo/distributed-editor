@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"proyecto-final-redes/repl"
 	"proyecto-final-redes/internal/client"
-	"proyecto-final-redes/internal/client/repl"
 	"proyecto-final-redes/internal/protocol/operation"
 
 	"github.com/spf13/cobra"
