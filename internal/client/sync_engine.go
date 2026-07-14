@@ -40,16 +40,18 @@ func NewSyncEngine(
 }
 
 func applyOperation(doc document.DocumentRep, op operation.Operation) document.DocumentRep {
-	if op.Op == operation.Insert {
+	switch op.Op {
+	case operation.Insert:
 		if op.Position > len(doc) {
 			op.Position = len(doc)
 		}
 		return doc[:op.Position] + op.Content + doc[op.Position:]
-	} else if op.Op == operation.Delete {
+	case operation.Delete:
 		if op.Position >= len(doc) || len(doc) == 0 {
 			return doc
 		}
 		return doc[:op.Position] + doc[op.Position+1:]
+	default:
 	}
 	return doc
 }
@@ -76,6 +78,7 @@ func (e *SyncEngine) handleLocalOp(op operation.Operation) {
 	e.mu.Lock()
 	// Aplicar optimista
 	e.document = applyOperation(e.document, op)
+	
 	op.Revision = e.revision
 
 	if e.inFlight == nil {
@@ -117,7 +120,7 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 	e.revision++
 	docStr := string(e.document)
 	e.mu.Unlock()
-	
+
 	if isValid {
 		select {
 		case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, docStr):
