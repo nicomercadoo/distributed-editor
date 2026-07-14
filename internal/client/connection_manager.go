@@ -25,7 +25,7 @@ type ConnectionManager struct {
 	Outbound  <-chan operation.Operation
 
 	Notifications chan<- string
-	
+
 	// parent context
 	ctx context.Context
 }
@@ -59,8 +59,24 @@ func (m *ConnectionManager) Connect(uri string) error {
 	sender := NewSender(m.conn, m.Outbound, m.cancelConn, m)
 	listener := NewListener(m.conn, m.RemoteOps, m.Acks, m.cancelConn, m.Notifications, m)
 
-	go sender.Run(m.activeConnCtx)
-	go listener.Run(m.activeConnCtx)
+	go func () {
+	    if err := sender.Run(m.activeConnCtx); err != nil {
+			select {
+			case m.Notifications <- "Error: " + err.Error():
+			default:
+			}
+            m.Disconnect()
+		}
+	} ()
+	go func () {
+	    if err := listener.Run(m.activeConnCtx); err != nil {
+			select {
+			case m.Notifications <- "Error: " + err.Error():
+			default:
+			}
+            m.Disconnect()
+		}
+	} ()
 
 	select {
 	case m.Notifications <- "Conectado a " + uri:
@@ -82,7 +98,7 @@ func (m *ConnectionManager) Disconnect() error {
 		m.cancelConn()
 		m.cancelConn = nil
 	}
-	
+
 	err := m.conn.Close()
 	m.conn = nil
 
