@@ -11,10 +11,15 @@ type dispatchMsg struct {
 	op     operation.Operation
 }
 
+type registerMsg struct {
+	client   *Client
+	revision int
+}
+
 type Hub struct {
 	clients       map[*Client]bool
 	Dispatch      chan dispatchMsg
-	Register      chan *Client
+	Register      chan registerMsg
 	Unregister    chan *Client
 	DocumentState *DocumentServerState
 }
@@ -22,7 +27,7 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		Dispatch:      make(chan dispatchMsg),
-		Register:      make(chan *Client),
+		Register:      make(chan registerMsg),
 		Unregister:    make(chan *Client),
 		clients:       make(map[*Client]bool),
 		DocumentState: NewDocumentServerState(),
@@ -32,14 +37,25 @@ func NewHub() *Hub {
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.Register:
-			h.clients[client] = true
-			for _, op := range h.DocumentState.RevisionLog {
-				msg, err := message.NewMessage(message.MessageTypeOperation, op)
-				if err != nil {
-					continue
+		case regMsg := <-h.Register:
+			h.clients[regMsg.client] = true
+			// Enviamos operaciones faltantes
+			if regMsg.revision >= 0 && regMsg.revision <= len(h.DocumentState.RevisionLog) {
+			SyncLoop:
+				for i := regMsg.revision; i < len(h.DocumentState.RevisionLog); i++ {
+					op := h.DocumentState.RevisionLog[i]
+					msg, err := message.NewMessage(message.MessageTypeOperation, op)
+					if err != nil {
+						continue
+					}
+					select {
+					case regMsg.client.send <- msg:
+					default:
+						close(regMsg.client.send)
+						delete(h.clients, regMsg.client)
+						break SyncLoop
+					}
 				}
-				client.send <- msg
 			}
 
 		case client := <-h.Unregister:

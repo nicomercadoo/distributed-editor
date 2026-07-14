@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sync"
 
+	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/document"
+	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
@@ -17,8 +19,7 @@ type SyncEngine struct {
 	inFlight *operation.Operation
 
 	LocalOps  <-chan operation.Operation
-	RemoteOps <-chan operation.Operation
-	Acks      <-chan int
+	Incoming  <-chan message.ServerEvent
 	Outbound  chan<- operation.Operation
 
 	Notifications chan<- string
@@ -26,15 +27,13 @@ type SyncEngine struct {
 
 func NewSyncEngine(
 	localOps <-chan operation.Operation,
-	remoteOps <-chan operation.Operation,
-	acks <-chan int,
+	incoming <-chan message.ServerEvent,
 	outbound chan<- operation.Operation,
 	notifications chan<- string,
 ) *SyncEngine {
 	return &SyncEngine{
 		LocalOps:      localOps,
-		RemoteOps:     remoteOps,
-		Acks:          acks,
+		Incoming:      incoming,
 		Outbound:      outbound,
 		Notifications: notifications,
 	}
@@ -62,10 +61,13 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			return
 		case op := <-e.LocalOps:
 			e.handleLocalOp(op)
-		case op := <-e.RemoteOps:
-			e.handleRemoteOp(op)
-		case ackRev := <-e.Acks:
-			e.handleAck(ackRev)
+		case msg := <-e.Incoming:
+			switch event := msg.(type) {
+			case ack.Ack:
+				e.handleAck(event.Revision)
+			case operation.Operation:
+				e.handleRemoteOp(event)
+			}
 		}
 	}
 }

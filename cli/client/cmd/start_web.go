@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"proyecto-final-redes/internal/client"
+	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 	"proyecto-final-redes/web_ui"
 
@@ -25,14 +26,13 @@ func newStartWebCmd() *cobra.Command {
 			defer cancel()
 
 			localOps := make(chan operation.Operation, 100)
-			remoteOps := make(chan operation.Operation, 100)
-			acks := make(chan int, 100)
+			incoming := make(chan message.ServerEvent, 100)
 			outbound := make(chan operation.Operation, 100)
 
 			notifications := make(chan string, 100)
 
-			syncEngine := client.NewSyncEngine(localOps, remoteOps, acks, outbound, notifications)
-			connManager := client.NewConnectionManager(ctx, remoteOps, acks, outbound, notifications)
+			syncEngine := client.NewSyncEngine(localOps, incoming, outbound, notifications)
+			connManager := client.NewConnectionManager(ctx, incoming, outbound, notifications, syncEngine.GetRevision)
 			appClient := client.NewAppClient(syncEngine, connManager)
 
 			server := webui.NewServer(localOps, appClient, webPort)

@@ -7,6 +7,10 @@ import (
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
+type ServerEvent interface {
+	IsServerEvent()
+}
+
 type MessageType = string
 
 const (

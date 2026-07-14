@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
+
+	"github.com/gorilla/websocket"
 )
 
 type ConnectionManager struct {
@@ -20,23 +22,23 @@ type ConnectionManager struct {
 	latency       time.Duration
 
 	// Data plane channels
-	RemoteOps chan<- operation.Operation
-	Acks      chan<- int
-	Outbound  <-chan operation.Operation
+	Incoming chan<- message.ServerEvent
+	Outbound <-chan operation.Operation
 
-	Notifications chan<- string
+	Notifications    chan<- string
+	revisionProvider func() int
 
 	// parent context
 	ctx context.Context
 }
 
-func NewConnectionManager(ctx context.Context, remoteOps chan<- operation.Operation, acks chan<- int, outbound <-chan operation.Operation, notifications chan<- string) *ConnectionManager {
+func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEvent, outbound <-chan operation.Operation, notifications chan<- string, getRevision func() int) *ConnectionManager {
 	return &ConnectionManager{
-		RemoteOps:     remoteOps,
-		Acks:          acks,
-		Outbound:      outbound,
-		Notifications: notifications,
-		ctx:           ctx,
+		Incoming:         incoming,
+		Outbound:         outbound,
+		Notifications:    notifications,
+		revisionProvider: getRevision,
+		ctx:              ctx,
 	}
 }
 
@@ -48,7 +50,13 @@ func (m *ConnectionManager) Connect(uri string) error {
 		return errors.New("Ya hay una conexión activa.")
 	}
 
-	c, _, err := websocket.DefaultDialer.Dial(uri, nil)
+	rev := 0
+	if m.revisionProvider != nil {
+		rev = m.revisionProvider()
+	}
+	uriWithRev := fmt.Sprintf("%s?revision=%d", uri, rev)
+
+	c, _, err := websocket.DefaultDialer.Dial(uriWithRev, nil)
 	if err != nil {
 		return fmt.Errorf("Error al conectar: %w", err)
 	}
@@ -57,26 +65,26 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
 	sender := NewSender(m.conn, m.Outbound, m.cancelConn, m)
-	listener := NewListener(m.conn, m.RemoteOps, m.Acks, m.cancelConn, m.Notifications, m)
+	listener := NewListener(m.conn, m.Incoming, m.cancelConn, m.Notifications, m)
 
-	go func () {
-	    if err := sender.Run(m.activeConnCtx); err != nil {
+	go func() {
+		if err := sender.Run(m.activeConnCtx); err != nil {
 			select {
 			case m.Notifications <- "Error: " + err.Error():
 			default:
 			}
-            m.Disconnect()
+			m.Disconnect()
 		}
-	} ()
-	go func () {
-	    if err := listener.Run(m.activeConnCtx); err != nil {
+	}()
+	go func() {
+		if err := listener.Run(m.activeConnCtx); err != nil {
 			select {
 			case m.Notifications <- "Error: " + err.Error():
 			default:
 			}
-            m.Disconnect()
+			m.Disconnect()
 		}
-	} ()
+	}()
 
 	select {
 	case m.Notifications <- "Conectado a " + uri:

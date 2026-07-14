@@ -36,7 +36,7 @@ func (s *Sender) Run(ctx context.Context) error {
 		case op := <-s.Outbound:
 			msg, err := message.NewMessage(message.MessageTypeOperation, op)
 			if err != nil {
-			    select {
+				select {
 				case s.Manager.Notifications <- "Error: Mensaje no pudo ser serializado":
 				default:
 				}
@@ -61,18 +61,16 @@ func (s *Sender) Run(ctx context.Context) error {
 
 type Listener struct {
 	Conn          *websocket.Conn
-	RemoteOps     chan<- operation.Operation
-	Acks          chan<- int
+	Incoming      chan<- message.ServerEvent
 	CancelConn    context.CancelFunc
 	Notifications chan<- string
 	Manager       *ConnectionManager
 }
 
-func NewListener(conn *websocket.Conn, remoteOps chan<- operation.Operation, acks chan<- int, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
+func NewListener(conn *websocket.Conn, incoming chan<- message.ServerEvent, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
 	return &Listener{
 		Conn:          conn,
-		RemoteOps:     remoteOps,
-		Acks:          acks,
+		Incoming:      incoming,
 		CancelConn:    cancel,
 		Notifications: notifs,
 		Manager:       manager,
@@ -90,7 +88,7 @@ func (l *Listener) Run(ctx context.Context) error {
 
 		var msg message.Message
 		if err := l.Conn.ReadJSON(&msg); err != nil {
-		    // l.Notifications <- "Error: Connexión Cerrada por el Servidor."
+			// l.Notifications <- "Error: Connexión Cerrada por el Servidor."
 			return errors.New("Conexión cerrada por el servidor")
 		}
 
@@ -119,7 +117,7 @@ func (l *Listener) Run(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					return nil
-				case l.RemoteOps <- op:
+				case l.Incoming <- op:
 				}
 			} else {
 				select {
@@ -133,7 +131,7 @@ func (l *Listener) Run(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					return nil
-				case l.Acks <- ackMsg.Revision:
+				case l.Incoming <- ackMsg:
 				}
 			} else {
 				select {

@@ -7,3 +7,5 @@ type Operation struct {
 	Content  string        `json:"content,omitempty"` // solo para insert
 	Revision int           `json:"revision"`
 }
+
+func (Operation) IsServerEvent() {}

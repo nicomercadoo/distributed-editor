@@ -4,3 +4,5 @@ package ack
 type Ack struct {
 	Revision int `json:"revision"`
 }
+
+func (Ack) IsServerEvent() {}

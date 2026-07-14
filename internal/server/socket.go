@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"proyecto-final-redes/internal/protocol/message"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 )
@@ -26,7 +27,10 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 			send: make(chan message.Message, 256),
 		}
 
-		client.hub.Register <- client
+		revisionStr := r.URL.Query().Get("revision")
+		revision, _ := strconv.Atoi(revisionStr)
+
+		client.hub.Register <- registerMsg{client: client, revision: revision}
 
 		go client.WritePump()
 		go client.ReadPump()
