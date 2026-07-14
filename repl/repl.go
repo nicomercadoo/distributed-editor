@@ -14,6 +14,7 @@ import (
 
 type REPL struct {
 	rl            *readline.Instance
+	onErrorState  bool
 	LocalOps      chan<- operation.Operation
 	Ctrl          client.AppController
 	Notifications <-chan string
@@ -37,6 +38,7 @@ func NewREPL(
 
 	return &REPL{
 		rl:            rl,
+		onErrorState:  false,
 		LocalOps:      localOps,
 		Ctrl:          ctrl,
 		Notifications: notifications,
@@ -49,12 +51,13 @@ func (r *REPL) Run(ctx context.Context) {
 
 	go r.notificationServer(ctx)
 
-	onErrorStatus := false
+	r.onErrorState = false
+	// onErrorStatus := false
 
 	for {
 	    fmt.Println("") // Add new line after each command for better readability
 
-	    r.setPrompt(onErrorStatus)
+	    r.setPrompt()
 		line, err := r.rl.Readline()
 		if err != nil {
 			if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
@@ -79,14 +82,14 @@ func (r *REPL) Run(ctx context.Context) {
 				return
 			}
 			fmt.Println("\033[31mError:\033[0m", err)
-			onErrorStatus = true
+			r.onErrorState = true
 		} else {
-			onErrorStatus = false
+			r.onErrorState = false
 		}
 	}
 }
 
-func(r *REPL) setPrompt(onErrorStatus bool) {
+func(r *REPL) setPrompt() {
    	promptConnectionStatus := "[Local]"
    	if r.Ctrl.IsConnected() {
   		promptConnectionStatus = "\033[32m[Conectado]\033[0m"
@@ -99,7 +102,7 @@ func(r *REPL) setPrompt(onErrorStatus bool) {
    	}
 
 	promptSymbol := "> "
-    if onErrorStatus{
+    if r.onErrorState {
         promptSymbol = "!> "
     }
 
@@ -125,6 +128,7 @@ func (r *REPL) notificationServer(ctx context.Context) {
 			// [!] msg  : Tu mensaje.
 			// \n       : Salto de línea.
 			// r.rl.Stdout() imprimirá esto y luego redibujará el prompt limpio debajo.
+			r.setPrompt()
 		    fmt.Fprintf(r.rl.Stdout(), "\r\033[2K[!] %s\n", msg)
 		}
 	}
