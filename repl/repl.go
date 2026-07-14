@@ -52,7 +52,6 @@ func (r *REPL) Run(ctx context.Context) {
 	go r.notificationServer(ctx)
 
 	r.onErrorState = false
-	// onErrorStatus := false
 
 	for {
 	    fmt.Println("") // Add new line after each command for better readability
