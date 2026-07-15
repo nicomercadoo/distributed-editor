@@ -125,8 +125,8 @@ func (l *Listener) Run(ctx context.Context) error {
 				default:
 				}
 			}
-		case message.MessageTypeAck:
-			ackMsg, err := msg.DecodeAck()
+		case message.MessageTypeAckApplied:
+			ackMsg, err := msg.DecodeAckApplied()
 			if err == nil {
 				select {
 				case <-ctx.Done():
