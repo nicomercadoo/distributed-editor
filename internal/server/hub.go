@@ -69,7 +69,7 @@ func (h *Hub) Run() {
 
 			// CONFIRMAR AL AUTOR (ACK)
 			// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
-			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.Ack{Revision: newRevision})
+			ackMsg, err := message.NewMessage(message.MessageTypeAck, ack.AckApplied{Revision: newRevision})
 			if err == nil {
 				select {
 				case dispatchMsg.client.send <- ackMsg:

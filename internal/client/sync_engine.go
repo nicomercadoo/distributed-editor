@@ -65,7 +65,7 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			e.handleLocalOp(op)
 		case msg := <-e.Incoming:
 			switch event := msg.(type) {
-			case ack.Ack:
+			case ack.AckApplied:
 				e.handleAck(event.Revision)
 			case operation.Operation:
 				e.handleRemoteOp(event)
@@ -78,7 +78,7 @@ func (e *SyncEngine) handleLocalOp(op operation.Operation) {
 	e.mu.Lock()
 	// Aplicar optimista
 	e.document = applyOperation(e.document, op)
-	
+
 	op.Revision = e.revision
 
 	if e.inFlight == nil {

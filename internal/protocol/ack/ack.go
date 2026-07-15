@@ -1,8 +1,8 @@
 package ack
 
-// Ack confirma procesamiento con revision actual.
-type Ack struct {
+// AckApplied confirma procesamiento con revision actual.
+type AckApplied struct {
 	Revision int `json:"revision"`
 }
 
-func (Ack) IsServerEvent() {}
+func (AckApplied) IsServerEvent() {}

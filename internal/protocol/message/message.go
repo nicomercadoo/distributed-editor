@@ -43,8 +43,8 @@ func (m Message) DecodeOperation() (operation.Operation, error) {
 	return op, err
 }
 
-func (m Message) DecodeAck() (ack.Ack, error) {
-	var ackMsg ack.Ack
+func (m Message) DecodeAck() (ack.AckApplied, error) {
+	var ackMsg ack.AckApplied
 	err := json.Unmarshal(m.Payload, &ackMsg)
 	return ackMsg, err
 }
