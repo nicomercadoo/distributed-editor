@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"proyecto-final-redes/internal/client"
+	"proyecto-final-redes/internal/client/syncengine"
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 	"proyecto-final-redes/web_ui"
@@ -31,7 +32,7 @@ func newStartWebCmd() *cobra.Command {
 
 			notifications := make(chan string, 100)
 
-			syncEngine := client.NewSyncEngine(localOps, incoming, outbound, notifications)
+			syncEngine := syncengine.NewSyncEngine(localOps, incoming, outbound, notifications)
 			connManager := client.NewConnectionManager(ctx, incoming, outbound, notifications, syncEngine.GetRevision)
 			appClient := client.NewAppClient(syncEngine, connManager)
 
@@ -50,7 +51,7 @@ func newStartWebCmd() *cobra.Command {
 			server.Run(ctx)
 		},
 	}
-	
+
 	cmd.Flags().IntVarP(&webPort, "port", "p", 3000, "Puerto local para servir la Web UI")
 	return cmd
 }
