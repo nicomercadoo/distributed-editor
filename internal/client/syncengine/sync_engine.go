@@ -1,4 +1,4 @@
-package client
+package syncengine
 
 import (
 	"context"
@@ -11,12 +11,14 @@ import (
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
+
+
 type SyncEngine struct {
 	mu       sync.RWMutex
 	document document.DocumentRep
 	revision document.ID
 	pending  []operation.Operation
-	inFlight *operation.Operation
+	inFlight *InFlightOperation
 
 	LocalOps  <-chan operation.Operation
 	Incoming  <-chan message.ServerEvent
@@ -82,9 +84,8 @@ func (e *SyncEngine) handleLocalOp(op operation.Operation) {
 	op.Revision = e.revision
 
 	if e.inFlight == nil {
-		inFlightOp := op
-		e.inFlight = &inFlightOp
-		e.Outbound <- inFlightOp
+		e.inFlight = NewInFlightOperation(op)
+		e.Outbound <- e.inFlight.Op()
 	} else {
 		e.pending = append(e.pending, op)
 	}
@@ -100,8 +101,9 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 	e.mu.Lock()
 	isValid := true
 	if e.inFlight != nil {
-		localOp := *e.inFlight
-		*e.inFlight, _ = operation.Transform(localOp, op)
+		localOp := e.inFlight.Op()
+		transformedLocalOp, _ := operation.Transform(localOp, op)
+		e.inFlight.SetOp(transformedLocalOp)
 		op, isValid = operation.Transform(op, localOp)
 	}
 	if isValid {
@@ -137,8 +139,8 @@ func (e *SyncEngine) handleAck(ackRev int) {
 		nextOp := e.pending[0]
 		e.pending = e.pending[1:]
 		nextOp.Revision = e.revision
-		e.inFlight = &nextOp
-		e.Outbound <- nextOp
+		e.inFlight = NewInFlightOperation(nextOp)
+		e.Outbound <- e.inFlight.Op()
 	}
 	rev := e.revision
 	e.mu.Unlock()
@@ -170,4 +172,22 @@ func (e *SyncEngine) HasInFlight() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.inFlight != nil
+}
+
+func (e *SyncEngine) GetInFlightAttempts() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.inFlight == nil {
+		return 0
+	}
+	return e.inFlight.Attempts()
+}
+
+func (e *SyncEngine) IsInFlightReceived() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.inFlight == nil {
+		return false
+	}
+	return e.inFlight.IsReceived()
 }

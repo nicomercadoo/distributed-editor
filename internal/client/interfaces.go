@@ -21,6 +21,8 @@ type DocumentInspector interface {
 	GetRevision() int
 	GetPendingCount() int
 	HasInFlight() bool
+	GetInFlightAttempts() int
+	IsInFlightReceived() bool
 }
 
 // AppController es la fachada unificada que consumirá el REPL
