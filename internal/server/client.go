@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/message"
 
 	"github.com/gorilla/websocket"
@@ -36,6 +37,15 @@ func (c *Client) ReadPump() {
 		if err != nil {
 			log.Printf("Error decodificando operacion: %v", err)
 			continue
+		}
+
+		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, ack.AckReceived{Received: true})
+		if err == nil {
+			// Bloqueamos hasta que haya espacio en el canal de envío.
+			// Esto garantiza la entrega del AckReceived. Si el canal está lleno,
+			// significa que el cliente está recibiendo muy lento (backpressure)
+			// y está bien que ReadPump se frene hasta que se libere espacio.
+			c.send <- ackRecv
 		}
 
 		c.hub.Dispatch <- dispatchMsg{client: c, op: op}
