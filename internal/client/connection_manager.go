@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 
@@ -27,6 +28,8 @@ type ConnectionManager struct {
 
 	Notifications    chan<- string
 	revisionProvider func() int
+	
+	inFlightOp *InFlightOperation
 
 	// parent context
 	ctx context.Context
@@ -64,8 +67,10 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.conn = c
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
-	sender := NewSender(m.conn, m.Outbound, m.cancelConn, m)
-	listener := NewListener(m.conn, m.Incoming, m.cancelConn, m.Notifications, m)
+	networkAcks := make(chan ack.AckReceived, 10)
+
+	sender := NewSender(m.conn, m.Outbound, networkAcks, m.cancelConn, m)
+	listener := NewListener(m.conn, m.Incoming, networkAcks, m.cancelConn, m.Notifications, m)
 
 	go func() {
 		if err := sender.Run(m.activeConnCtx); err != nil {
@@ -134,4 +139,32 @@ func (m *ConnectionManager) GetLatency() time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.latency
+}
+
+func (m *ConnectionManager) GetInFlightAttempts() int {
+	m.mu.RLock()
+	op := m.inFlightOp
+	m.mu.RUnlock()
+	
+	if op == nil {
+		return 0
+	}
+	return op.Attempts()
+}
+
+func (m *ConnectionManager) IsInFlightReceived() bool {
+	m.mu.RLock()
+	op := m.inFlightOp
+	m.mu.RUnlock()
+	
+	if op == nil {
+		return false
+	}
+	return op.IsReceived()
+}
+
+func (m *ConnectionManager) SetInFlightOp(op *InFlightOperation) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.inFlightOp = op
 }

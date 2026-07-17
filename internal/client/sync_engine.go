@@ -1,4 +1,4 @@
-package syncengine
+package client
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type SyncEngine struct {
 	document document.DocumentRep
 	revision document.ID
 	pending  []operation.Operation
-	inFlight *InFlightOperation
+	inFlight *operation.Operation
 
 	LocalOps  <-chan operation.Operation
 	Incoming  <-chan message.ServerEvent
@@ -67,8 +67,9 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			e.handleLocalOp(op)
 		case msg := <-e.Incoming:
 			switch event := msg.(type) {
+			// handleAckReceived ya no se procesa aquí
 			case ack.AckApplied:
-				e.handleAck(event.Revision)
+				e.handleAckApplied(event)
 			case operation.Operation:
 				e.handleRemoteOp(event)
 			}
@@ -84,8 +85,9 @@ func (e *SyncEngine) handleLocalOp(op operation.Operation) {
 	op.Revision = e.revision
 
 	if e.inFlight == nil {
-		e.inFlight = NewInFlightOperation(op)
-		e.Outbound <- e.inFlight.Op()
+		inFlightOp := op
+		e.inFlight = &inFlightOp
+		e.Outbound <- *e.inFlight
 	} else {
 		e.pending = append(e.pending, op)
 	}
@@ -101,9 +103,9 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 	e.mu.Lock()
 	isValid := true
 	if e.inFlight != nil {
-		localOp := e.inFlight.Op()
+		localOp := *e.inFlight
 		transformedLocalOp, _ := operation.Transform(localOp, op)
-		e.inFlight.SetOp(transformedLocalOp)
+		*e.inFlight = transformedLocalOp
 		op, isValid = operation.Transform(op, localOp)
 	}
 	if isValid {
@@ -131,16 +133,19 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 	}
 }
 
-func (e *SyncEngine) handleAck(ackRev int) {
+// handleAckReceived removido porque ya no aplica a OT
+
+
+func (e *SyncEngine) handleAckApplied(ack ack.AckApplied) {
 	e.mu.Lock()
-	e.revision = ackRev
+	e.revision = ack.Revision
 	e.inFlight = nil
 	if len(e.pending) > 0 {
 		nextOp := e.pending[0]
 		e.pending = e.pending[1:]
 		nextOp.Revision = e.revision
-		e.inFlight = NewInFlightOperation(nextOp)
-		e.Outbound <- e.inFlight.Op()
+		e.inFlight = &nextOp
+		e.Outbound <- *e.inFlight
 	}
 	rev := e.revision
 	e.mu.Unlock()
@@ -174,20 +179,4 @@ func (e *SyncEngine) HasInFlight() bool {
 	return e.inFlight != nil
 }
 
-func (e *SyncEngine) GetInFlightAttempts() int {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.inFlight == nil {
-		return 0
-	}
-	return e.inFlight.Attempts()
-}
 
-func (e *SyncEngine) IsInFlightReceived() bool {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.inFlight == nil {
-		return false
-	}
-	return e.inFlight.IsReceived()
-}

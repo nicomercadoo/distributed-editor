@@ -8,7 +8,7 @@ import (
 
 	"proyecto-final-redes/repl"
 	"proyecto-final-redes/internal/client"
-	"proyecto-final-redes/internal/client/syncengine"
+
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 
@@ -30,7 +30,7 @@ func newStartCmd() *cobra.Command {
 
 			notifications := make(chan string, 100)
 
-			syncEngine := syncengine.NewSyncEngine(localOps, incoming, outbound, notifications)
+			syncEngine := client.NewSyncEngine(localOps, incoming, outbound, notifications)
 			connManager := client.NewConnectionManager(ctx, incoming, outbound, notifications, syncEngine.GetRevision)
 			appClient := client.NewAppClient(syncEngine, connManager)
 
