@@ -2,7 +2,6 @@ package ack
 
 // AckReceived confirma recepción de un ack con la revision procesada.
 type AckReceived struct {
-	Received bool `json:"received"`
 }
 
 func (AckReceived) IsServerEvent() {}
