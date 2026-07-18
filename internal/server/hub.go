@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
@@ -39,8 +40,13 @@ func (h *Hub) Run() {
 		select {
 		case regMsg := <-h.Register:
 			h.clients[regMsg.client] = true
+			log.Printf("Cliente registrado. Clientes activos: %d", len(h.clients))
 			// Enviamos operaciones faltantes
 			if regMsg.revision >= 0 && regMsg.revision <= len(h.DocumentState.RevisionLog) {
+				opsMissing := len(h.DocumentState.RevisionLog) - regMsg.revision
+				if opsMissing > 0 {
+					log.Printf("Sincronizando %d operaciones faltantes al cliente", opsMissing)
+				}
 			SyncLoop:
 				for i := regMsg.revision; i < len(h.DocumentState.RevisionLog); i++ {
 					op := h.DocumentState.RevisionLog[i]
@@ -51,6 +57,7 @@ func (h *Hub) Run() {
 					select {
 					case regMsg.client.send <- msg:
 					default:
+						log.Printf("Cliente desconectado por saturación en SyncLoop")
 						close(regMsg.client.send)
 						delete(h.clients, regMsg.client)
 						break SyncLoop
@@ -62,10 +69,12 @@ func (h *Hub) Run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				log.Printf("Cliente desconectado. Clientes activos: %d", len(h.clients))
 			}
 
 		case dispatchMsg := <-h.Dispatch:
 			isValid, transformedOp, newRevision := h.DocumentState.ProcessOperation(dispatchMsg.op)
+			log.Printf("Operación procesada (rev cliente: %d). Válida: %v, Nueva Revisión: %d", dispatchMsg.op.Revision, isValid, newRevision)
 
 			// CONFIRMAR AL AUTOR (ACK)
 			// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
@@ -94,6 +103,7 @@ func (h *Hub) Run() {
 					select {
 					case client.send <- outMsg:
 					default:
+						log.Printf("Cliente desconectado por saturación en broadcast")
 						close(client.send)
 						delete(h.clients, client)
 					}

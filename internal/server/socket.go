@@ -30,6 +30,8 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 		revisionStr := r.URL.Query().Get("revision")
 		revision, _ := strconv.Atoi(revisionStr)
 
+		log.Printf("Nuevo cliente conectado desde %s (revisión solicitada: %d)", conn.RemoteAddr().String(), revision)
+
 		client.hub.Register <- registerMsg{client: client, revision: revision}
 
 		go client.WritePump()

@@ -65,6 +65,7 @@ func (c *Client) WritePump() {
 
 		err := c.conn.WriteJSON(msg)
 		if err != nil {
+			log.Printf("Error de escritura al cliente: %v", err)
 			return
 		}
 	}
