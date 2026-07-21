@@ -112,7 +112,6 @@ func (s *Sender) Run(ctx context.Context) error {
 		case <-s.NetworkAcks:
 			if pendingOp != nil {
 				pendingOp.SetReceived(true)
-				s.Manager.Notifications <- "Ack recibido"
 				if ticker != nil {
 					ticker.Stop()
 				}
@@ -242,6 +241,10 @@ func (l *Listener) Run(ctx context.Context) error {
 				case <-ctx.Done():
 					return nil
 				case l.NetworkAcks <- ackMsg:
+				}
+				select {
+				case l.Notifications <- "Ack recibido":
+				default:
 				}
 			} else {
 				select {
