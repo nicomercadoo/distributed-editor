@@ -25,13 +25,13 @@ type Hub struct {
 	DocumentState *DocumentServerState
 }
 
-func NewHub() *Hub {
+func NewHub(clear bool) *Hub {
 	return &Hub{
 		Dispatch:      make(chan dispatchMsg),
 		Register:      make(chan registerMsg),
 		Unregister:    make(chan *Client),
 		clients:       make(map[*Client]bool),
-		DocumentState: NewDocumentServerState(),
+		DocumentState: NewDocumentServerState(clear),
 	}
 }
 

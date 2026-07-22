@@ -11,12 +11,14 @@ import (
 )
 
 func newStartCmd() *cobra.Command {
-	return &cobra.Command{
+	var clear bool
+
+	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Inicia el servidor",
 		Long:  "Arranca el servidor WebSocket de edicion colaborativa.",
 		Run: func(cmd *cobra.Command, args []string) {
-		    hub := server.NewHub()
+			hub := server.NewHub(clear)
 			go hub.Run() // Iniciamos el hub en segundo plano
 			log.Print("Hub iniciado. Esperando conexiones...\n")
 
@@ -30,4 +32,7 @@ func newStartCmd() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().BoolVarP(&clear, "clear", "c", false, "Limpia el historial de operaciones y arranca un documento nuevo")
+	return cmd
 }

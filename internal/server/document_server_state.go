@@ -1,19 +1,58 @@
 package server
 
 import (
+	"encoding/json"
+	"log"
+	"os"
+
 	"proyecto-final-redes/internal/protocol/document"
 	"proyecto-final-redes/internal/protocol/operation"
 )
+
+const serverHistoryFile = "server_history.json"
 
 type DocumentServerState struct {
 	RevisionLog []operation.Operation
 	Document    document.DocumentRep // Por ahora no lo ulitizamos
 }
 
-func NewDocumentServerState() *DocumentServerState {
-	return &DocumentServerState{
+func NewDocumentServerState(clear bool) *DocumentServerState {
+	state := &DocumentServerState{
 		RevisionLog: make([]operation.Operation, 0),
 		Document:    "",
+	}
+
+	if clear {
+		log.Println("Limpiando el historial de operaciones...")
+		state.saveState()
+	} else {
+		data, err := os.ReadFile(serverHistoryFile)
+		if err == nil {
+			err = json.Unmarshal(data, &state.RevisionLog)
+			if err != nil {
+				log.Printf("Error al parsear %s, iniciando historial vacío: %v\n", serverHistoryFile, err)
+			} else {
+				log.Printf("Historial cargado desde %s con %d operaciones.\n", serverHistoryFile, len(state.RevisionLog))
+			}
+		} else if !os.IsNotExist(err) {
+			log.Printf("No se pudo leer %s, iniciando historial vacío: %v\n", serverHistoryFile, err)
+		} else {
+			log.Printf("No existe %s, iniciando documento nuevo.\n", serverHistoryFile)
+		}
+	}
+
+	return state
+}
+
+func (state *DocumentServerState) saveState() {
+	data, err := json.MarshalIndent(state.RevisionLog, "", "  ")
+	if err != nil {
+		log.Printf("Error al serializar historial: %v\n", err)
+		return
+	}
+	err = os.WriteFile(serverHistoryFile, data, 0644)
+	if err != nil {
+		log.Printf("Error al escribir el historial en disco: %v\n", err)
 	}
 }
 
@@ -45,5 +84,7 @@ func (state *DocumentServerState) ProcessOperation(op operation.Operation) (bool
 
 	// La operación superó las transformaciones, la guardamos
 	state.RevisionLog = append(state.RevisionLog, op)
+	state.saveState() // Persistir estado
+
 	return true, op, len(state.RevisionLog)
 }
