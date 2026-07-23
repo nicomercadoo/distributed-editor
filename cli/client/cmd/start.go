@@ -6,11 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"proyecto-final-redes/repl"
 	"proyecto-final-redes/internal/client"
+	"proyecto-final-redes/repl"
 
 	"proyecto-final-redes/internal/protocol/message"
-	"proyecto-final-redes/internal/protocol/operation"
 
 	"github.com/spf13/cobra"
 )
@@ -24,9 +23,9 @@ func newStartCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			localOps := make(chan operation.Operation, 100)
+			localOps := make(chan message.Operation, 100)
 			incoming := make(chan message.ServerEvent, 100)
-			outbound := make(chan operation.Operation, 100)
+			outbound := make(chan message.Operation, 100)
 
 			notifications := make(chan string, 100)
 

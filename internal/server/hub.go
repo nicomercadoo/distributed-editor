@@ -2,14 +2,13 @@ package server
 
 import (
 	"log"
-	"proyecto-final-redes/internal/protocol/ack"
+
 	"proyecto-final-redes/internal/protocol/message"
-	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type dispatchMsg struct {
 	client *Client
-	op     operation.Operation
+	op     message.Operation
 }
 
 type registerMsg struct {
@@ -90,7 +89,7 @@ func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
 
 	// CONFIRMAR AL AUTOR (ACK)
 	// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
-	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, ack.AckApplied{Revision: newRevision})
+	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{Revision: newRevision})
 	if err == nil {
 		select {
 		case dispatchMsg.client.send <- ackMsg:

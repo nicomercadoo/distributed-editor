@@ -1,4 +1,4 @@
-package operation
+package message
 
 // Operation representa los comandos insert(c,p) y delete(p).
 type Operation struct {

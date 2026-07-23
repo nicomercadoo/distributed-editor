@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"proyecto-final-redes/internal/protocol/message"
 	"strconv"
 	"time"
 	"unicode/utf8"
-
-	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type Handler func(Command, *REPL) error
@@ -82,8 +81,8 @@ var Handlers = map[string]Handler{
 		if err != nil || pos < 0 {
 			return errors.New("Posición invalida.")
 		}
-		op := operation.Operation{
-			Op:       operation.Insert,
+		op := message.Operation{
+			Op:       message.Insert,
 			Position: pos,
 			Content:  cmd.Args[0],
 		}
@@ -99,8 +98,8 @@ var Handlers = map[string]Handler{
 		if err != nil || pos < 0 {
 			return errors.New("Posición invalida.")
 		}
-		op := operation.Operation{
-			Op:       operation.Delete,
+		op := message.Operation{
+			Op:       message.Delete,
 			Position: pos,
 		}
 		r.LocalOps <- op

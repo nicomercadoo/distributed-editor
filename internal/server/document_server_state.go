@@ -4,19 +4,19 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-
-	"proyecto-final-redes/internal/protocol/operation"
+	"proyecto-final-redes/internal/ot"
+	"proyecto-final-redes/internal/protocol/message"
 )
 
 const serverHistoryFile = "server_history.json"
 
 type DocumentServerState struct {
-	RevisionLog []operation.Operation
+	RevisionLog []message.Operation
 }
 
 func NewDocumentServerState(clear bool) *DocumentServerState {
 	state := &DocumentServerState{
-		RevisionLog: make([]operation.Operation, 0),
+		RevisionLog: make([]message.Operation, 0),
 	}
 
 	if clear {
@@ -61,14 +61,14 @@ Retorna:
 - transformedOp: la operación resultante.
 - revision: el número de revisión actualizado del servidor.
 */
-func (state *DocumentServerState) ProcessOperation(op operation.Operation) (bool, operation.Operation, int) {
+func (state *DocumentServerState) ProcessOperation(op message.Operation) (bool, message.Operation, int) {
 	isValid := true
 	clientRevision := op.Revision
 
 	// Transformamos la operación contra el historial reciente
 	for i := clientRevision; i < len(state.RevisionLog); i++ {
 		appliedOp := state.RevisionLog[i]
-		op, isValid = operation.Transform(op, appliedOp)
+		op, isValid = ot.Transform(op, appliedOp)
 		// Si se anula, cortamos el bucle.
 		if !isValid {
 			break

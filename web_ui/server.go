@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"proyecto-final-redes/internal/client"
-	"proyecto-final-redes/internal/protocol/operation"
+	"proyecto-final-redes/internal/protocol/message"
+
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
@@ -18,12 +19,12 @@ var upgrader = websocket.Upgrader{
 }
 
 type Server struct {
-	localOps chan<- operation.Operation
+	localOps chan<- message.Operation
 	ctrl     client.AppController
 	port     int
 }
 
-func NewServer(localOps chan<- operation.Operation, ctrl client.AppController, port int) *Server {
+func NewServer(localOps chan<- message.Operation, ctrl client.AppController, port int) *Server {
 	return &Server{
 		localOps: localOps,
 		ctrl:     ctrl,
@@ -146,15 +147,15 @@ func (s *Server) readLoop(c *websocket.Conn) {
 
 		switch msg.Type {
 		case "insert":
-			s.localOps <- operation.Operation{
-				Op:       operation.Insert,
+			s.localOps <- message.Operation{
+				Op:       message.Insert,
 				Position: msg.Pos,
 				Content:  msg.Char,
 				Revision: s.ctrl.GetRevision(),
 			}
 		case "delete":
-			s.localOps <- operation.Operation{
-				Op:       operation.Delete,
+			s.localOps <- message.Operation{
+				Op:       message.Delete,
 				Position: msg.Pos,
 				Revision: s.ctrl.GetRevision(),
 			}

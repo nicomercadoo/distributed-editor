@@ -2,9 +2,6 @@ package message
 
 import (
 	"encoding/json"
-
-	"proyecto-final-redes/internal/protocol/ack"
-	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type ServerEvent interface {
@@ -36,20 +33,20 @@ func NewMessage(messageType MessageType, payload any) (Message, error) {
 	}, nil
 }
 
-func (m Message) DecodeOperation() (operation.Operation, error) {
-	var op operation.Operation
+func (m Message) DecodeOperation() (Operation, error) {
+	var op Operation
 	err := json.Unmarshal(m.Payload, &op)
 	return op, err
 }
 
-func (m Message) DecodeAckReceived() (ack.AckReceived, error) {
-	var ackMsg ack.AckReceived
+func (m Message) DecodeAckReceived() (AckReceived, error) {
+	var ackMsg AckReceived
 	err := json.Unmarshal(m.Payload, &ackMsg)
 	return ackMsg, err
 }
 
-func (m Message) DecodeAckApplied() (ack.AckApplied, error) {
-	var ackMsg ack.AckApplied
+func (m Message) DecodeAckApplied() (AckApplied, error) {
+	var ackMsg AckApplied
 	err := json.Unmarshal(m.Payload, &ackMsg)
 	return ackMsg, err
 }

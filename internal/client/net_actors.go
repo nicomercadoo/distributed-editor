@@ -6,9 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/message"
-	"proyecto-final-redes/internal/protocol/operation"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,12 +15,12 @@ const retryTimeout = 2 * time.Second
 
 type InFlightOperation struct {
 	mu       sync.RWMutex
-	op       operation.Operation
+	op       message.Operation
 	attempts int
 	received bool
 }
 
-func NewInFlightOperation(op operation.Operation) *InFlightOperation {
+func NewInFlightOperation(op message.Operation) *InFlightOperation {
 	return &InFlightOperation{
 		op:       op,
 		attempts: 3,
@@ -30,7 +28,7 @@ func NewInFlightOperation(op operation.Operation) *InFlightOperation {
 	}
 }
 
-func (i *InFlightOperation) Op() operation.Operation {
+func (i *InFlightOperation) Op() message.Operation {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	return i.op
@@ -64,13 +62,13 @@ func (i *InFlightOperation) SetReceived(received bool) {
 
 type Sender struct {
 	Conn        *websocket.Conn
-	Outbound    <-chan operation.Operation
-	NetworkAcks <-chan ack.AckReceived
+	Outbound    <-chan message.Operation
+	NetworkAcks <-chan message.AckReceived
 	CancelConn  context.CancelFunc
 	Manager     *ConnectionManager
 }
 
-func NewSender(conn *websocket.Conn, outbound <-chan operation.Operation, networkAcks <-chan ack.AckReceived, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
+func NewSender(conn *websocket.Conn, outbound <-chan message.Operation, networkAcks <-chan message.AckReceived, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
 	return &Sender{
 		Conn:        conn,
 		Outbound:    outbound,
@@ -141,7 +139,7 @@ func (s *Sender) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Sender) writeToSocket(op operation.Operation, ctx context.Context) error {
+func (s *Sender) writeToSocket(op message.Operation, ctx context.Context) error {
 	msg, err := message.NewMessage(message.MessageTypeOperation, op)
 	if err != nil {
 		select {
@@ -170,13 +168,13 @@ func (s *Sender) writeToSocket(op operation.Operation, ctx context.Context) erro
 type Listener struct {
 	Conn          *websocket.Conn
 	Incoming      chan<- message.ServerEvent
-	NetworkAcks   chan<- ack.AckReceived
+	NetworkAcks   chan<- message.AckReceived
 	CancelConn    context.CancelFunc
 	Notifications chan<- string
 	Manager       *ConnectionManager
 }
 
-func NewListener(conn *websocket.Conn, incoming chan<- message.ServerEvent, networkAcks chan<- ack.AckReceived, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
+func NewListener(conn *websocket.Conn, incoming chan<- message.ServerEvent, networkAcks chan<- message.AckReceived, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
 	return &Listener{
 		Conn:          conn,
 		Incoming:      incoming,

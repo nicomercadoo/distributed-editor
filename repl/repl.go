@@ -7,21 +7,22 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chzyer/readline"
 	"proyecto-final-redes/internal/client"
-	"proyecto-final-redes/internal/protocol/operation"
+	"proyecto-final-redes/internal/protocol/message"
+
+	"github.com/chzyer/readline"
 )
 
 type REPL struct {
 	rl            *readline.Instance
 	onErrorState  bool
-	LocalOps      chan<- operation.Operation
+	LocalOps      chan<- message.Operation
 	Ctrl          client.AppController
 	Notifications <-chan string
 }
 
 func NewREPL(
-	localOps chan<- operation.Operation,
+	localOps chan<- message.Operation,
 	ctrl client.AppController,
 	notifications <-chan string,
 ) (*REPL, error) {
@@ -54,9 +55,9 @@ func (r *REPL) Run(ctx context.Context) {
 	r.onErrorState = false
 
 	for {
-	    fmt.Println("") // Add new line after each command for better readability
+		fmt.Println("") // Add new line after each command for better readability
 
-	    r.setPrompt()
+		r.setPrompt()
 		line, err := r.rl.Readline()
 		if err != nil {
 			if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
@@ -88,24 +89,24 @@ func (r *REPL) Run(ctx context.Context) {
 	}
 }
 
-func(r *REPL) setPrompt() {
-   	promptConnectionStatus := "[Local]"
-   	if r.Ctrl.IsConnected() {
-  		promptConnectionStatus = "\033[32m[Conectado]\033[0m"
-   	}
+func (r *REPL) setPrompt() {
+	promptConnectionStatus := "[Local]"
+	if r.Ctrl.IsConnected() {
+		promptConnectionStatus = "\033[32m[Conectado]\033[0m"
+	}
 
-   	promptLatency := ""
-   	latency := r.Ctrl.GetLatency()
-   	if latency > 0 {
-  		promptLatency = fmt.Sprintf("\033[33m[%s]\033[0m", latency)
-   	}
+	promptLatency := ""
+	latency := r.Ctrl.GetLatency()
+	if latency > 0 {
+		promptLatency = fmt.Sprintf("\033[33m[%s]\033[0m", latency)
+	}
 
 	promptSymbol := "> "
-    if r.onErrorState {
-        promptSymbol = "!> "
-    }
+	if r.onErrorState {
+		promptSymbol = "!> "
+	}
 
-   	r.rl.SetPrompt(promptConnectionStatus + promptLatency + promptSymbol)
+	r.rl.SetPrompt(promptConnectionStatus + promptLatency + promptSymbol)
 }
 
 func (r *REPL) handleCommand(cmd Command) error {
@@ -122,13 +123,13 @@ func (r *REPL) notificationServer(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-r.Notifications:
-            // \r       : Mueve el cursor al inicio de la línea física.
+			// \r       : Mueve el cursor al inicio de la línea física.
 			// \033[2K  : Limpia toda la línea (borra el prompt residual).
 			// [!] msg  : Tu mensaje.
 			// \n       : Salto de línea.
 			// r.rl.Stdout() imprimirá esto y luego redibujará el prompt limpio debajo.
 			r.setPrompt()
-		    fmt.Fprintf(r.rl.Stdout(), "\r\033[2K[!] %s\n", msg)
+			fmt.Fprintf(r.rl.Stdout(), "\r\033[2K[!] %s\n", msg)
 		}
 	}
 }

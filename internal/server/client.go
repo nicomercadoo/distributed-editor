@@ -2,7 +2,7 @@ package server
 
 import (
 	"log"
-	"proyecto-final-redes/internal/protocol/ack"
+
 	"proyecto-final-redes/internal/protocol/message"
 
 	"github.com/gorilla/websocket"
@@ -39,7 +39,7 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
-		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, ack.AckReceived{})
+		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, message.AckReceived{})
 		if err == nil {
 			// Bloqueamos hasta que haya espacio en el canal de envío.
 			// Esto garantiza la entrega del AckReceived. Si el canal está lleno,

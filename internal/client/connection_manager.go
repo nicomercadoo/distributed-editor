@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"proyecto-final-redes/internal/protocol/ack"
 	"proyecto-final-redes/internal/protocol/message"
-	"proyecto-final-redes/internal/protocol/operation"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,18 +22,18 @@ type ConnectionManager struct {
 
 	// Data plane channels
 	Incoming chan<- message.ServerEvent
-	Outbound <-chan operation.Operation
+	Outbound <-chan message.Operation
 
 	Notifications    chan<- string
 	revisionProvider func() int
-	
+
 	inFlightOp *InFlightOperation
 
 	// parent context
 	ctx context.Context
 }
 
-func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEvent, outbound <-chan operation.Operation, notifications chan<- string, getRevision func() int) *ConnectionManager {
+func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEvent, outbound <-chan message.Operation, notifications chan<- string, getRevision func() int) *ConnectionManager {
 	return &ConnectionManager{
 		Incoming:         incoming,
 		Outbound:         outbound,
@@ -67,7 +65,7 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.conn = c
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
-	networkAcks := make(chan ack.AckReceived, 10)
+	networkAcks := make(chan message.AckReceived, 10)
 
 	sender := NewSender(m.conn, m.Outbound, networkAcks, m.cancelConn, m)
 	listener := NewListener(m.conn, m.Incoming, networkAcks, m.cancelConn, m.Notifications, m)
@@ -145,7 +143,7 @@ func (m *ConnectionManager) GetInFlightAttempts() int {
 	m.mu.RLock()
 	op := m.inFlightOp
 	m.mu.RUnlock()
-	
+
 	if op == nil {
 		return 0
 	}
@@ -156,7 +154,7 @@ func (m *ConnectionManager) IsInFlightReceived() bool {
 	m.mu.RLock()
 	op := m.inFlightOp
 	m.mu.RUnlock()
-	
+
 	if op == nil {
 		return false
 	}

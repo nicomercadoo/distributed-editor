@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"proyecto-final-redes/internal/protocol/ack"
+	"proyecto-final-redes/internal/ot"
 	"proyecto-final-redes/internal/protocol/message"
-	"proyecto-final-redes/internal/protocol/operation"
 )
 
 type Document = string
@@ -16,20 +15,20 @@ type SyncEngine struct {
 	mu       sync.RWMutex
 	document Document
 	revision int
-	pending  []operation.Operation
-	inFlight *operation.Operation
+	pending  []message.Operation
+	inFlight *message.Operation
 
-	LocalOps <-chan operation.Operation
+	LocalOps <-chan message.Operation
 	Incoming <-chan message.ServerEvent
-	Outbound chan<- operation.Operation
+	Outbound chan<- message.Operation
 
 	Notifications chan<- string
 }
 
 func NewSyncEngine(
-	localOps <-chan operation.Operation,
+	localOps <-chan message.Operation,
 	incoming <-chan message.ServerEvent,
-	outbound chan<- operation.Operation,
+	outbound chan<- message.Operation,
 	notifications chan<- string,
 ) *SyncEngine {
 	return &SyncEngine{
@@ -40,14 +39,14 @@ func NewSyncEngine(
 	}
 }
 
-func applyOperation(doc Document, op operation.Operation) Document {
+func applyOperation(doc Document, op message.Operation) Document {
 	switch op.Op {
-	case operation.Insert:
+	case message.Insert:
 		if op.Position > len(doc) {
 			op.Position = len(doc)
 		}
 		return doc[:op.Position] + op.Content + doc[op.Position:]
-	case operation.Delete:
+	case message.Delete:
 		if op.Position >= len(doc) || len(doc) == 0 {
 			return doc
 		}
@@ -67,16 +66,16 @@ func (e *SyncEngine) Run(ctx context.Context) {
 		case msg := <-e.Incoming:
 			switch event := msg.(type) {
 			// handleAckReceived ya no se procesa aquí
-			case ack.AckApplied:
+			case message.AckApplied:
 				e.handleAckApplied(event)
-			case operation.Operation:
+			case message.Operation:
 				e.handleRemoteOp(event)
 			}
 		}
 	}
 }
 
-func (e *SyncEngine) handleLocalOp(op operation.Operation) {
+func (e *SyncEngine) handleLocalOp(op message.Operation) {
 	e.mu.Lock()
 	// Aplicar optimista
 	e.document = applyOperation(e.document, op)
@@ -98,20 +97,20 @@ func (e *SyncEngine) handleLocalOp(op operation.Operation) {
 	}
 }
 
-func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
+func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 	e.mu.Lock()
 	isValid := true
 	if e.inFlight != nil {
 		localOp := *e.inFlight
-		transformedLocalOp, _ := operation.Transform(localOp, op)
+		transformedLocalOp, _ := ot.Transform(localOp, op)
 		*e.inFlight = transformedLocalOp
-		op, isValid = operation.Transform(op, localOp)
+		op, isValid = ot.Transform(op, localOp)
 	}
 	if isValid {
 		for i := range e.pending {
 			localOp := e.pending[i]
-			e.pending[i], _ = operation.Transform(localOp, op)
-			op, isValid = operation.Transform(op, localOp)
+			e.pending[i], _ = ot.Transform(localOp, op)
+			op, isValid = ot.Transform(op, localOp)
 			if !isValid {
 				break
 			}
@@ -134,7 +133,7 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 
 // handleAckReceived removido porque ya no aplica a OT
 
-func (e *SyncEngine) handleAckApplied(ack ack.AckApplied) {
+func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
 	e.revision = ack.Revision
 	e.inFlight = nil

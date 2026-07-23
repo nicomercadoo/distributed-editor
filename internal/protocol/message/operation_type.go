@@ -1,4 +1,4 @@
-package operation
+package message
 
 type OperationType int
 
