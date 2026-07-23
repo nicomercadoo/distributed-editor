@@ -1,6 +1,6 @@
 package message
 
-// AckReceived confirma recepción de un ack con la revision procesada.
+// AckReceived confirma recepción de operacion por parte del servidor.
 type AckReceived struct {
 }
 
