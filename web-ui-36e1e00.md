@@ -29,22 +29,22 @@ El servidor del `start-web` en Go ahora cumple un doble rol: es el cliente del s
 
 ```mermaid
 architecture-beta
-    group GoClient(cloud)[Cliente Híbrido Go]
+    group ClienteHibridoGo(cloud)
     
-    service Browser(internet)[Navegador Web (index.html)]
+    service NavegadorWeb(internet)
     
-    service WebUIServer(server)[WebUIServer (Adaptador)] in GoClient
-    service AppController(database)[AppController (Read-only State)] in GoClient
-    service SyncEngine(disk)[Sync Engine (Core)] in GoClient
-    service ConnManager(server)[Connection Manager] in GoClient
+    service WebUIServer(server) in ClienteHibridoGo
+    service AppController(database) in ClienteHibridoGo
+    service SyncEngine(disk) in ClienteHibridoGo
+    service ConnManager(server) in ClienteHibridoGo
     
-    service RemoteServer(cloud)[Servidor Remoto WS]
+    service ServidorRemotoWS(cloud)
 
-    Browser:R -- L:WebUIServer
+    NavegadorWeb:R -- L:WebUIServer
     WebUIServer:R -- L:AppController
     WebUIServer:T -- B:SyncEngine
     SyncEngine:R -- L:ConnManager
-    ConnManager:R -- L:RemoteServer
+    ConnManager:R -- L:ServidorRemotoWS
 ```
 
 ## 4. Flujo de Datos
