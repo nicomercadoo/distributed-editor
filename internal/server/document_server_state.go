@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	"proyecto-final-redes/internal/protocol/document"
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
@@ -13,13 +12,11 @@ const serverHistoryFile = "server_history.json"
 
 type DocumentServerState struct {
 	RevisionLog []operation.Operation
-	Document    document.DocumentRep // Por ahora no lo ulitizamos
 }
 
 func NewDocumentServerState(clear bool) *DocumentServerState {
 	state := &DocumentServerState{
 		RevisionLog: make([]operation.Operation, 0),
-		Document:    "",
 	}
 
 	if clear {

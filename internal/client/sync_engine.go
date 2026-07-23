@@ -6,23 +6,22 @@ import (
 	"sync"
 
 	"proyecto-final-redes/internal/protocol/ack"
-	"proyecto-final-redes/internal/protocol/document"
 	"proyecto-final-redes/internal/protocol/message"
 	"proyecto-final-redes/internal/protocol/operation"
 )
 
-
+type Document = string
 
 type SyncEngine struct {
 	mu       sync.RWMutex
-	document document.DocumentRep
-	revision document.ID
+	document Document
+	revision int
 	pending  []operation.Operation
 	inFlight *operation.Operation
 
-	LocalOps  <-chan operation.Operation
-	Incoming  <-chan message.ServerEvent
-	Outbound  chan<- operation.Operation
+	LocalOps <-chan operation.Operation
+	Incoming <-chan message.ServerEvent
+	Outbound chan<- operation.Operation
 
 	Notifications chan<- string
 }
@@ -41,7 +40,7 @@ func NewSyncEngine(
 	}
 }
 
-func applyOperation(doc document.DocumentRep, op operation.Operation) document.DocumentRep {
+func applyOperation(doc Document, op operation.Operation) Document {
 	switch op.Op {
 	case operation.Insert:
 		if op.Position > len(doc) {
@@ -135,7 +134,6 @@ func (e *SyncEngine) handleRemoteOp(op operation.Operation) {
 
 // handleAckReceived removido porque ya no aplica a OT
 
-
 func (e *SyncEngine) handleAckApplied(ack ack.AckApplied) {
 	e.mu.Lock()
 	e.revision = ack.Revision
@@ -178,5 +176,3 @@ func (e *SyncEngine) HasInFlight() bool {
 	defer e.mu.RUnlock()
 	return e.inFlight != nil
 }
-
-
