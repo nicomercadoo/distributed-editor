@@ -190,7 +190,6 @@ func NewListener(conn *websocket.Conn, incoming chan<- message.ServerEvent, netw
 func (l *Listener) Run(ctx context.Context) error {
 	defer l.CancelConn()
 
-	var expectedSeqNum int
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -200,15 +199,6 @@ func (l *Listener) Run(ctx context.Context) error {
 		if err := l.Conn.ReadJSON(&msg); err != nil {
 			return errors.New("Conexión cerrada por el servidor")
 		}
-
-		if msg.SeqNum != 0 && msg.SeqNum != expectedSeqNum {
-			select {
-			case l.Notifications <- "Error: Secuencia de paquete invalida.":
-			default:
-			}
-			return nil
-		}
-		expectedSeqNum = msg.SeqNum + 1
 
 		lat := l.Manager.GetLatency()
 		if lat > 0 {

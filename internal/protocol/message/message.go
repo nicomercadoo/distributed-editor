@@ -14,16 +14,14 @@ type ServerEvent interface {
 type MessageType = string
 
 const (
-	MessageTypeOperation    = "operation"
-	MessageTypeAckReceived  = "ack_received"
-	MessageTypeAckApplied   = "ack_applied"
+	MessageTypeOperation   = "operation"
+	MessageTypeAckReceived = "ack_received"
+	MessageTypeAckApplied  = "ack_applied"
 )
 
 type Message struct {
-	Type     string          `json:"type"`
-	SeqNum   int             `json:"seqNum,omitempty"`
-	Revision int             `json:"revision,omitempty"`
-	Payload  json.RawMessage `json:"payload"`
+	Type    MessageType     `json:"type"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 func NewMessage(messageType MessageType, payload any) (Message, error) {
