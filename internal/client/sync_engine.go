@@ -65,7 +65,6 @@ func (e *SyncEngine) Run(ctx context.Context) {
 			e.handleLocalOp(op)
 		case msg := <-e.Incoming:
 			switch event := msg.(type) {
-			// handleAckReceived ya no se procesa aquí
 			case message.AckApplied:
 				e.handleAckApplied(event)
 			case message.Operation:
@@ -130,8 +129,6 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 		}
 	}
 }
-
-// handleAckReceived removido porque ya no aplica a OT
 
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()

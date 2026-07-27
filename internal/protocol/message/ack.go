@@ -4,8 +4,6 @@ package message
 type AckReceived struct {
 }
 
-func (AckReceived) IsServerEvent() {}
-
 // AckApplied confirma procesamiento con revision actual.
 type AckApplied struct {
 	Revision int `json:"revision"`
