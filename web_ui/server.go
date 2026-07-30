@@ -67,10 +67,11 @@ type StateMsg struct {
 }
 
 type ClientMsg struct {
-	Type string `json:"type"` // "insert", "delete", "cmd_connect", "cmd_disconnect"
-	Pos  int    `json:"pos,omitempty"`
-	Char string `json:"char,omitempty"`
-	URI  string `json:"uri,omitempty"`
+	Type     string `json:"type"` // "insert", "delete", "cmd_connect", "cmd_disconnect", "cmd_latency"
+	Pos      int    `json:"pos,omitempty"`
+	Char     string `json:"char,omitempty"`
+	URI      string `json:"uri,omitempty"`
+	Duration string `json:"duration,omitempty"`
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +167,15 @@ func (s *Server) readLoop(c *websocket.Conn) {
 		case "cmd_disconnect":
 			if err := s.ctrl.Disconnect(); err != nil {
 				log.Println("disconnect error:", err)
+			}
+		case "cmd_latency":
+			d, err := time.ParseDuration(msg.Duration)
+			if err != nil {
+				log.Println("invalid latency duration:", err)
+			} else {
+				if err := s.ctrl.SetLatency(d); err != nil {
+					log.Println("set latency error:", err)
+				}
 			}
 		}
 	}

@@ -47,7 +47,9 @@ var Handlers = map[string]Handler{
 		if err != nil || d < 0 {
 			return errors.New("Latencia invalida.")
 		}
-		r.Ctrl.SetLatency(d)
+		if err := r.Ctrl.SetLatency(d); err != nil {
+			return fmt.Errorf("error al establecer latencia en proxy: %w", err)
+		}
 		return nil
 	},
 

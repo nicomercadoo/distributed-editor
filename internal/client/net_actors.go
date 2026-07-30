@@ -149,15 +149,6 @@ func (s *Sender) writeToSocket(op message.Operation, ctx context.Context) error 
 		return nil // We don't drop the connection for a serialization error
 	}
 
-	lat := s.Manager.GetLatency()
-	if lat > 0 {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(lat):
-		}
-	}
-
 	if err := s.Conn.WriteJSON(msg); err != nil {
 		return errors.New("Connexión cerrada por el servidor")
 	}
@@ -196,15 +187,6 @@ func (l *Listener) Run(ctx context.Context) error {
 		var msg message.Message
 		if err := l.Conn.ReadJSON(&msg); err != nil {
 			return errors.New("Conexión cerrada por el servidor")
-		}
-
-		lat := l.Manager.GetLatency()
-		if lat > 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(lat):
-			}
 		}
 
 		switch msg.Type {

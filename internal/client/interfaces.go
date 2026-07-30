@@ -11,7 +11,7 @@ type ConnectionController interface {
 
 // NetworkSimulator permite inyectar latencia artificial para pruebas de sincronización
 type NetworkSimulator interface {
-	SetLatency(d time.Duration)
+	SetLatency(d time.Duration) error
 	GetLatency() time.Duration
 }
 
