@@ -62,8 +62,8 @@ type StateMsg struct {
 	Document     string `json:"document"`
 	Revision     int    `json:"revision"`
 	PendingCount int    `json:"pendingCount"`
-	HasInFlight  bool   `json:"hasInFlight"`
-	IsConnected  bool   `json:"isConnected"`
+	HasInFlight   bool   `json:"hasInFlight"`
+	IsConnected   bool   `json:"isConnected"`
 }
 
 type ClientMsg struct {
@@ -119,8 +119,8 @@ func (s *Server) pushLoop(ctx context.Context, c *websocket.Conn) {
 				Document:     s.ctrl.GetDocument(),
 				Revision:     s.ctrl.GetRevision(),
 				PendingCount: s.ctrl.GetPendingCount(),
-				HasInFlight:  s.ctrl.HasInFlight(),
-				IsConnected:  s.ctrl.IsConnected(),
+				HasInFlight:   s.ctrl.HasInFlight(),
+				IsConnected:   s.ctrl.IsConnected(),
 			}
 
 			if currentState != lastState {
@@ -167,15 +167,6 @@ func (s *Server) readLoop(c *websocket.Conn) {
 		case "cmd_disconnect":
 			if err := s.ctrl.Disconnect(); err != nil {
 				log.Println("disconnect error:", err)
-			}
-		case "cmd_latency":
-			d, err := time.ParseDuration(msg.Duration)
-			if err != nil {
-				log.Println("invalid latency duration:", err)
-			} else {
-				if err := s.ctrl.SetLatency(d); err != nil {
-					log.Println("set latency error:", err)
-				}
 			}
 		}
 	}

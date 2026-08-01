@@ -1,0 +1,16 @@
+[
+    {
+        "name": "redes_proxy",
+        "listen": "[::]:8081",
+        "upstream": "localhost:8080",
+        "enabled": true,
+        "toxics": [
+            {
+                "name": "latencia",
+                "type": "latency",
+                "stream": "downstream",
+                "attributes": { "latency": 2000, "jitter": 500 }
+            }
+        ]
+    }
+]

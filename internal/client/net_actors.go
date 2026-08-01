@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"proyecto-final-redes/internal/protocol/message"
-
-	"github.com/gorilla/websocket"
 )
 
 const retryTimeout = 2 * time.Second
@@ -61,14 +59,14 @@ func (i *InFlightOperation) SetReceived(received bool) {
 }
 
 type Sender struct {
-	Conn        *websocket.Conn
+	Conn        WSConn
 	Outbound    <-chan message.Operation
 	NetworkAcks <-chan message.AckReceived
 	CancelConn  context.CancelFunc
 	Manager     *ConnectionManager
 }
 
-func NewSender(conn *websocket.Conn, outbound <-chan message.Operation, networkAcks <-chan message.AckReceived, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
+func NewSender(conn WSConn, outbound <-chan message.Operation, networkAcks <-chan message.AckReceived, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
 	return &Sender{
 		Conn:        conn,
 		Outbound:    outbound,
@@ -157,7 +155,7 @@ func (s *Sender) writeToSocket(op message.Operation, ctx context.Context) error 
 }
 
 type Listener struct {
-	Conn          *websocket.Conn
+	Conn          WSConn
 	Incoming      chan<- message.ServerEvent
 	NetworkAcks   chan<- message.AckReceived
 	CancelConn    context.CancelFunc
@@ -165,7 +163,7 @@ type Listener struct {
 	Manager       *ConnectionManager
 }
 
-func NewListener(conn *websocket.Conn, incoming chan<- message.ServerEvent, networkAcks chan<- message.AckReceived, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
+func NewListener(conn WSConn, incoming chan<- message.ServerEvent, networkAcks chan<- message.AckReceived, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
 	return &Listener{
 		Conn:          conn,
 		Incoming:      incoming,

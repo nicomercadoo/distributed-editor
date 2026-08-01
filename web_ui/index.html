@@ -18,6 +18,7 @@
         textarea::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         textarea::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
+    <script src="wasm_exec.js"></script>
 </head>
 <body class="h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
     
@@ -48,10 +49,7 @@
                     <button id="btn-connect" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95">Connect</button>
                     <button id="btn-disconnect" class="px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg transition-all shadow-[0_0_15px_rgba(220,38,38,0.3)] hover:shadow-[0_0_20px_rgba(220,38,38,0.5)] active:scale-95 hidden">Disconnect</button>
                 </div>
-                <div class="flex gap-2 ml-auto">
-                    <input type="text" id="latency-val" value="0ms" class="w-20 px-3 py-2 bg-slate-900/80 border border-slate-600 rounded-lg text-sm text-slate-200 focus:border-purple-500 transition-colors shadow-inner text-center" placeholder="e.g. 500ms">
-                    <button id="btn-latency" class="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold rounded-lg transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)] hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] active:scale-95" title="Set Latency">Lat</button>
-                </div>
+
             </div>
         </header>
 
@@ -70,8 +68,6 @@
         const wsUriInput = document.getElementById('ws-uri');
         const btnConnect = document.getElementById('btn-connect');
         const btnDisconnect = document.getElementById('btn-disconnect');
-        const latencyVal = document.getElementById('latency-val');
-        const btnLatency = document.getElementById('btn-latency');
         const editor = document.getElementById('editor');
         const connIndicator = document.getElementById('conn-indicator');
         const connText = document.getElementById('conn-text');
@@ -79,90 +75,79 @@
         const pendingText = document.getElementById('pending-text');
         const syncBar = document.getElementById('sync-bar');
 
-        let ws;
         let lastKnownDoc = "";
         let isLocalUpdate = false;
         let updateTimeout;
 
-        function connectLocal() {
-            ws = new WebSocket(`ws://${window.location.host}/ws`);
-            
-            ws.onopen = () => {
-                console.log("Connected to local bridge");
-            };
-
-            ws.onmessage = (e) => {
-                const state = JSON.parse(e.data);
-                
-                revText.textContent = state.revision;
-                pendingText.textContent = state.pendingCount;
-                
-                if (state.isConnected) {
-                    connIndicator.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]';
-                    connText.textContent = "Connected";
-                    btnConnect.classList.add('hidden');
-                    btnDisconnect.classList.remove('hidden');
-                } else {
-                    connIndicator.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
-                    connText.textContent = "Disconnected";
-                    btnConnect.classList.remove('hidden');
-                    btnDisconnect.classList.add('hidden');
-                }
-
-                if (state.hasInFlight || state.pendingCount > 0) {
-                    syncBar.classList.remove('opacity-0');
-                } else {
-                    syncBar.classList.add('opacity-0');
-                }
-
-                // Protect cursor position while typing
-                if (state.document !== editor.value && !isLocalUpdate) {
-                    const start = editor.selectionStart;
-                    const end = editor.selectionEnd;
-                    const lenDiff = state.document.length - editor.value.length;
-                    
-                    editor.value = state.document;
-                    lastKnownDoc = state.document;
-                    
-                    // Restore cursor if it makes sense
-                    const newStart = Math.max(0, Math.min(start + lenDiff, state.document.length));
-                    const newEnd = Math.max(0, Math.min(end + lenDiff, state.document.length));
-                    editor.setSelectionRange(newStart, newEnd);
-                }
-            };
-
-            ws.onclose = () => {
-                console.log("Disconnected from local bridge");
-                setTimeout(connectLocal, 1000); // auto-reconnect to Go server
+        // Initialize WebAssembly
+        if (!WebAssembly.instantiateStreaming) {
+            WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                const source = await (await resp).arrayBuffer();
+                return await WebAssembly.instantiate(source, importObject);
             };
         }
+        
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            go.run(result.instance);
+        }).catch(err => {
+            console.error("Failed to load WASM module", err);
+        });
 
-        connectLocal();
+        // Called by WASM backend
+        window.updateState = function(stateStr) {
+            const state = JSON.parse(stateStr);
+            
+            revText.textContent = state.revision;
+            pendingText.textContent = state.pendingCount;
+            
+            if (state.isConnected) {
+                connIndicator.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]';
+                connText.textContent = "Connected";
+                btnConnect.classList.add('hidden');
+                btnDisconnect.classList.remove('hidden');
+            } else {
+                connIndicator.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
+                connText.textContent = "Disconnected";
+                btnConnect.classList.remove('hidden');
+                btnDisconnect.classList.add('hidden');
+            }
+
+            if (state.hasInFlight || state.pendingCount > 0) {
+                syncBar.classList.remove('opacity-0');
+            } else {
+                syncBar.classList.add('opacity-0');
+            }
+
+            // Protect cursor position while typing
+            if (state.document !== editor.value && !isLocalUpdate) {
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                const lenDiff = state.document.length - editor.value.length;
+                
+                editor.value = state.document;
+                lastKnownDoc = state.document;
+                
+                // Restore cursor if it makes sense
+                const newStart = Math.max(0, Math.min(start + lenDiff, state.document.length));
+                const newEnd = Math.max(0, Math.min(end + lenDiff, state.document.length));
+                editor.setSelectionRange(newStart, newEnd);
+            }
+        };
 
         btnConnect.onclick = () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "cmd_connect", uri: wsUriInput.value }));
+            if (typeof connectWasm === "function") {
+                connectWasm(wsUriInput.value);
             }
         };
 
         btnDisconnect.onclick = () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "cmd_disconnect" }));
+            if (typeof disconnectWasm === "function") {
+                disconnectWasm();
             }
         };
 
-        btnLatency.onclick = () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "cmd_latency", duration: latencyVal.value }));
-            }
-        };
 
-        // Allow pressing Enter on latency input
-        latencyVal.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                btnLatency.click();
-            }
-        });
 
         function computeDiff(oldStr, newStr) {
             let start = 0;
@@ -184,9 +169,8 @@
         }
 
         editor.addEventListener('input', (e) => {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                // Prevent editing if we are not connected to local Go backend?
-                // It will reconnect anyway, so it's fine.
+            if (typeof insertWasm !== "function") {
+                // WASM not ready
                 lastKnownDoc = editor.value;
                 return;
             }
@@ -198,12 +182,12 @@
             
             // Delete first (multiple operations at the same position)
             for (let i = 0; i < diff.deleted; i++) {
-                ws.send(JSON.stringify({ type: "delete", pos: diff.pos }));
+                deleteWasm(diff.pos);
             }
             
             // Then Insert (one bulk operation)
             if (diff.inserted.length > 0) {
-                ws.send(JSON.stringify({ type: "insert", pos: diff.pos, char: diff.inserted }));
+                insertWasm(diff.pos, diff.inserted);
             }
             
             lastKnownDoc = editor.value;
