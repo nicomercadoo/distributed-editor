@@ -40,7 +40,7 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
-		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, message.AckReceived{})
+		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, message.AckReceived{Revision: op.Revision})
 		if err == nil {
 			// Bloqueamos hasta que haya espacio en el canal de envío.
 			// Esto garantiza la entrega del AckReceived. Si el canal está lleno,
