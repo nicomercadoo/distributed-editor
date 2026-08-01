@@ -9,9 +9,10 @@ import (
 )
 
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan message.Message
+	hub              *Hub
+	conn             *websocket.Conn
+	send             chan message.Message
+	lastRevisionRead int
 }
 
 func (c *Client) ReadPump() {
@@ -47,6 +48,12 @@ func (c *Client) ReadPump() {
 			// y está bien que ReadPump se frene hasta que se libere espacio.
 			c.send <- ackRecv
 		}
+
+		if op.Revision <= c.lastRevisionRead {
+			log.Printf("Operación duplicada descartada de %s: revisión %d <= %d", c.conn.RemoteAddr().String(), op.Revision, c.lastRevisionRead)
+			continue
+		}
+		c.lastRevisionRead = op.Revision
 
 		c.hub.Dispatch <- dispatchMsg{client: c, op: op}
 	}
