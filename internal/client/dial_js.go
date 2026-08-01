@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"syscall/js"
-	"time"
 )
 
 type jsWSConn struct {
@@ -103,14 +102,4 @@ func (c *jsWSConn) Close() error {
 		close(c.close)
 	}
 	return nil
-}
-
-func (m *ConnectionManager) cleanupProxy() {
-	// No-op en JS ya que no hay toxiproxy nativo
-}
-
-func (m *ConnectionManager) setLatencyNative(d time.Duration) error {
-	// No se puede aplicar toxiproxy en el navegador directamente
-	// a menos que se inyecte latencia artificial en este cliente JS.
-	return errors.New("latencia no soportada nativamente en modo WebAssembly")
 }

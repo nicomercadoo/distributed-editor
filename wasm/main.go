@@ -64,9 +64,9 @@ func main() {
 						state := map[string]interface{}{
 							"document":     doc,
 							"revision":     rev,
-							"pendingCount": pending,
-							"hasInFlight":  inFlight,
-							"isConnected":  connected,
+							"pendingCount":  pending,
+							"hasInFlight":   inFlight,
+							"isConnected":   connected,
 						}
 						// Convert state to JS Object
 						b, _ := json.Marshal(state)
@@ -123,20 +123,7 @@ func main() {
 		return nil
 	}))
 
-	js.Global().Set("setLatencyWasm", js.FuncOf(func(this js.Value, args []js.Value) any {
-		durationStr := args[0].String()
-		d, err := time.ParseDuration(durationStr)
-		if err != nil {
-			js.Global().Get("console").Call("error", "Invalid latency:", err.Error())
-			return nil
-		}
-		go func() {
-			if err := appClient.SetLatency(d); err != nil {
-				js.Global().Get("console").Call("error", "Error setting latency:", err.Error())
-			}
-		}()
-		return nil
-	}))
+
 
 	<-c
 }

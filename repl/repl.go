@@ -95,18 +95,14 @@ func (r *REPL) setPrompt() {
 		promptConnectionStatus = "\033[32m[Conectado]\033[0m"
 	}
 
-	promptLatency := ""
-	latency := r.Ctrl.GetLatency()
-	if latency > 0 {
-		promptLatency = fmt.Sprintf("\033[33m[%s]\033[0m", latency)
-	}
+
 
 	promptSymbol := "> "
 	if r.onErrorState {
 		promptSymbol = "!> "
 	}
 
-	r.rl.SetPrompt(promptConnectionStatus + promptLatency + promptSymbol)
+	r.rl.SetPrompt(promptConnectionStatus + promptSymbol)
 }
 
 func (r *REPL) handleCommand(cmd Command) error {
@@ -140,8 +136,7 @@ func printHelp() {
     disconnect                  Desconecta del servidor
     insert <char> <pos>         Envia una operacion de insercion
     delete <pos>                Envia una operacion de borrado
-    latency <duracion><unit>    Establece latencia artificial (unidades: ns, us, ms, s, m, h)
-    status                      Muestra el estado de la conexion y latencia
+    status                      Muestra el estado de la conexion
     doc                         Muestra el documento y estado de la sincronizacion
     help                        Muestra esta ayuda
     exit                        Sale del REPL`)
@@ -151,7 +146,7 @@ func newCompleter() *readline.PrefixCompleter {
 	return readline.NewPrefixCompleter(
 		readline.PcItem("connect"),
 		readline.PcItem("disconnect"),
-		readline.PcItem("latency"),
+
 		readline.PcItem("status"),
 		readline.PcItem("doc"),
 		readline.PcItem("insert"),

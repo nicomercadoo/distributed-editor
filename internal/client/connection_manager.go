@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"proyecto-final-redes/internal/protocol/message"
-
-	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 )
 
 type ConnectionManager struct {
@@ -18,8 +15,6 @@ type ConnectionManager struct {
 	conn          WSConn
 	activeConnCtx context.Context
 	cancelConn    context.CancelFunc
-	latency       time.Duration
-	toxiProxy     *toxiproxy.Proxy
 
 	// Data plane channels
 	Incoming chan<- message.ServerEvent
@@ -114,8 +109,6 @@ func (m *ConnectionManager) Disconnect() error {
 	err := m.conn.Close()
 	m.conn = nil
 
-	m.cleanupProxy()
-
 	select {
 	case m.Notifications <- "Desconectado":
 	default:
@@ -128,20 +121,6 @@ func (m *ConnectionManager) IsConnected() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.conn != nil
-}
-
-func (m *ConnectionManager) SetLatency(d time.Duration) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.latency = d
-	return m.setLatencyNative(d)
-}
-
-func (m *ConnectionManager) GetLatency() time.Duration {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.latency
 }
 
 func (m *ConnectionManager) GetInFlightAttempts() int {

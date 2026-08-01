@@ -6,7 +6,6 @@ import (
 	"io"
 	"proyecto-final-redes/internal/protocol/message"
 	"strconv"
-	"time"
 	"unicode/utf8"
 )
 
@@ -39,27 +38,12 @@ var Handlers = map[string]Handler{
 		return nil
 	},
 
-	"latency": func(cmd Command, r *REPL) error {
-		if len(cmd.Args) < 1 {
-			return errors.New("Uso: latency <duracion>")
-		}
-		d, err := time.ParseDuration(cmd.Args[0])
-		if err != nil || d < 0 {
-			return errors.New("Latencia invalida.")
-		}
-		if err := r.Ctrl.SetLatency(d); err != nil {
-			return fmt.Errorf("error al establecer latencia en proxy: %w", err)
-		}
-		return nil
-	},
-
 	"status": func(cmd Command, r *REPL) error {
 		connected := "No conectado"
 		if r.Ctrl.IsConnected() {
 			connected = "Conectado"
 		}
-		lat := r.Ctrl.GetLatency()
-		fmt.Printf("Estado: %s\nLatencia: %s\n", connected, lat)
+		fmt.Printf("Estado: %s\n", connected)
 		return nil
 	},
 
