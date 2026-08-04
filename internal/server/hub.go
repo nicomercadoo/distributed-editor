@@ -7,9 +7,8 @@ import (
 )
 
 type dispatchMsg struct {
-	client      *Client
-	op          message.Operation
-	IsDuplicate bool
+	client *Client
+	op     message.Operation
 }
 
 type registerMsg struct {
@@ -85,7 +84,8 @@ func (h *Hub) handleUnregister(client *Client) {
 }
 
 func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
-	if dispatchMsg.IsDuplicate {
+	if h.DocumentState.IsDuplicate(dispatchMsg.op.ID) {
+		log.Printf("Operación duplicada detectada: %s (rev cliente: %d)", dispatchMsg.op.ID, dispatchMsg.op.Revision)
 		ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
 			ClientRevision: dispatchMsg.op.Revision,
 			ServerRevision: len(h.DocumentState.RevisionLog),

@@ -11,12 +11,14 @@ import (
 const serverHistoryFile = "server_history.json"
 
 type DocumentServerState struct {
-	RevisionLog []message.Operation
+	RevisionLog  []message.Operation
+	processedIDs map[string]bool
 }
 
 func NewDocumentServerState(clear bool) *DocumentServerState {
 	state := &DocumentServerState{
-		RevisionLog: make([]message.Operation, 0),
+		RevisionLog:  make([]message.Operation, 0),
+		processedIDs: make(map[string]bool),
 	}
 
 	if clear {
@@ -38,6 +40,13 @@ func NewDocumentServerState(clear bool) *DocumentServerState {
 		}
 	}
 
+	// Populate processedIDs from the loaded log
+	for _, op := range state.RevisionLog {
+		if op.ID != "" {
+			state.processedIDs[op.ID] = true
+		}
+	}
+
 	return state
 }
 
@@ -51,6 +60,14 @@ func (state *DocumentServerState) saveState() {
 	if err != nil {
 		log.Printf("Error al escribir el historial en disco: %v\n", err)
 	}
+}
+
+func (state *DocumentServerState) IsDuplicate(id string) bool {
+	if id == "" {
+		return false
+	}
+	_, exists := state.processedIDs[id]
+	return exists
 }
 
 /*
@@ -81,6 +98,9 @@ func (state *DocumentServerState) ProcessOperation(op message.Operation) (bool, 
 
 	// La operación superó las transformaciones, la guardamos
 	state.RevisionLog = append(state.RevisionLog, op)
+	if op.ID != "" {
+		state.processedIDs[op.ID] = true
+	}
 	state.saveState() // Persistir estado
 
 	return true, op, len(state.RevisionLog)

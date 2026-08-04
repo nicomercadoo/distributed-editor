@@ -7,6 +7,8 @@ import (
 
 	"proyecto-final-redes/internal/ot"
 	"proyecto-final-redes/internal/protocol/message"
+
+	"github.com/google/uuid"
 )
 
 type Document = string
@@ -79,6 +81,7 @@ func (e *SyncEngine) handleLocalOp(op message.Operation) {
 	// Aplicar optimista
 	e.document = applyOperation(e.document, op)
 
+	op.ID = uuid.New().String()
 	op.Revision = e.revision
 
 	if e.inFlight == nil {
@@ -98,6 +101,21 @@ func (e *SyncEngine) handleLocalOp(op message.Operation) {
 
 func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 	e.mu.Lock()
+
+	// Chequeamos si es nuestra propia operacion que vuelve durante el sync
+	if e.inFlight != nil && e.inFlight.ID == op.ID {
+		e.revision++
+		e.advancePending()
+		docStr := string(e.document)
+		e.mu.Unlock()
+
+		select {
+		case e.Notifications <- fmt.Sprintf("Operación propia confirmada vía sync. Documento: %s", docStr):
+		default:
+		}
+		return
+	}
+
 	isValid := true
 	if e.inFlight != nil {
 		localOp := *e.inFlight
@@ -133,6 +151,17 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
 	e.revision = ack.ServerRevision
+	e.advancePending()
+	rev := e.revision
+	e.mu.Unlock()
+	select {
+	case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", rev):
+	default:
+	}
+}
+
+// Asume que e.mu está bloqueado por el invocante
+func (e *SyncEngine) advancePending() {
 	e.inFlight = nil
 	if len(e.pending) > 0 {
 		nextOp := e.pending[0]
@@ -140,12 +169,6 @@ func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 		nextOp.Revision = e.revision
 		e.inFlight = &nextOp
 		e.Outbound <- *e.inFlight
-	}
-	rev := e.revision
-	e.mu.Unlock()
-	select {
-	case e.Notifications <- fmt.Sprintf("Ack revision %d recibido", rev):
-	default:
 	}
 }
 

@@ -22,10 +22,9 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 		}
 
 		client := &Client{
-			hub:              hub,
-			conn:             conn,
-			send:             make(chan message.Message, 100000),
-			lastRevisionRead: -1,
+			hub:  hub,
+			conn: conn,
+			send: make(chan message.Message, 100000),
 		}
 
 		revisionStr := r.URL.Query().Get("revision")

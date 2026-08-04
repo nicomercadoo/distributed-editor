@@ -9,10 +9,9 @@ import (
 )
 
 type Client struct {
-	hub              *Hub
-	conn             *websocket.Conn
-	send             chan message.Message
-	lastRevisionRead int
+	hub  *Hub
+	conn *websocket.Conn
+	send chan message.Message
 }
 
 func (c *Client) ReadPump() {
@@ -40,14 +39,7 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
-		if op.Revision <= c.lastRevisionRead {
-			log.Printf("Operación duplicada de %s: revisión %d <= %d", c.conn.RemoteAddr().String(), op.Revision, c.lastRevisionRead)
-			c.hub.Dispatch <- dispatchMsg{client: c, op: op, IsDuplicate: true}
-			continue
-		}
-		c.lastRevisionRead = op.Revision
-
-		c.hub.Dispatch <- dispatchMsg{client: c, op: op, IsDuplicate: false}
+		c.hub.Dispatch <- dispatchMsg{client: c, op: op}
 	}
 }
 
