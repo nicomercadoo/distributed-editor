@@ -61,12 +61,12 @@ func (i *InFlightOperation) SetReceived(received bool) {
 type Sender struct {
 	Conn        WSConn
 	Outbound    <-chan message.Operation
-	NetworkAcks <-chan message.AckReceived
+	NetworkAcks <-chan message.AckApplied
 	CancelConn  context.CancelFunc
 	Manager     *ConnectionManager
 }
 
-func NewSender(conn WSConn, outbound <-chan message.Operation, networkAcks <-chan message.AckReceived, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
+func NewSender(conn WSConn, outbound <-chan message.Operation, networkAcks <-chan message.AckApplied, cancel context.CancelFunc, manager *ConnectionManager) *Sender {
 	return &Sender{
 		Conn:        conn,
 		Outbound:    outbound,
@@ -157,13 +157,13 @@ func (s *Sender) writeToSocket(op message.Operation, ctx context.Context) error 
 type Listener struct {
 	Conn          WSConn
 	Incoming      chan<- message.ServerEvent
-	NetworkAcks   chan<- message.AckReceived
+	NetworkAcks   chan<- message.AckApplied
 	CancelConn    context.CancelFunc
 	Notifications chan<- string
 	Manager       *ConnectionManager
 }
 
-func NewListener(conn WSConn, incoming chan<- message.ServerEvent, networkAcks chan<- message.AckReceived, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
+func NewListener(conn WSConn, incoming chan<- message.ServerEvent, networkAcks chan<- message.AckApplied, cancel context.CancelFunc, notifs chan<- string, manager *ConnectionManager) *Listener {
 	return &Listener{
 		Conn:          conn,
 		Incoming:      incoming,
@@ -202,24 +202,7 @@ func (l *Listener) Run(ctx context.Context) error {
 				default:
 				}
 			}
-		case message.MessageTypeAckReceived:
-			ackMsg, err := msg.DecodeAckReceived()
-			if err == nil {
-				select {
-				case <-ctx.Done():
-					return nil
-				case l.NetworkAcks <- ackMsg:
-				}
-				select {
-				case l.Notifications <- "Ack recibido":
-				default:
-				}
-			} else {
-				select {
-				case l.Notifications <- "AckReceived invalido recibido del servidor.":
-				default:
-				}
-			}
+
 		case message.MessageTypeAckApplied:
 			ackMsg, err := msg.DecodeAckApplied()
 			if err == nil {
@@ -227,6 +210,11 @@ func (l *Listener) Run(ctx context.Context) error {
 				case <-ctx.Done():
 					return nil
 				case l.Incoming <- ackMsg:
+				}
+				select {
+				case <-ctx.Done():
+					return nil
+				case l.NetworkAcks <- ackMsg:
 				}
 			} else {
 				select {

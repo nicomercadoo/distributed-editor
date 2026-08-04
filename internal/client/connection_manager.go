@@ -61,7 +61,7 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.conn = c
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
-	networkAcks := make(chan message.AckReceived, 10)
+	networkAcks := make(chan message.AckApplied, 10)
 
 	sender := NewSender(m.conn, m.Outbound, networkAcks, m.cancelConn, m)
 	listener := NewListener(m.conn, m.Incoming, networkAcks, m.cancelConn, m.Notifications, m)
