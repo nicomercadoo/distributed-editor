@@ -11,9 +11,8 @@ type ServerEvent interface {
 type MessageType = string
 
 const (
-	MessageTypeOperation   = "operation"
-	MessageTypeAckReceived = "ack_received"
-	MessageTypeAckApplied  = "ack_applied"
+	MessageTypeOperation  = "operation"
+	MessageTypeAckApplied = "ack_applied"
 )
 
 type Message struct {
@@ -37,12 +36,6 @@ func (m Message) DecodeOperation() (Operation, error) {
 	var op Operation
 	err := json.Unmarshal(m.Payload, &op)
 	return op, err
-}
-
-func (m Message) DecodeAckReceived() (AckReceived, error) {
-	var ackMsg AckReceived
-	err := json.Unmarshal(m.Payload, &ackMsg)
-	return ackMsg, err
 }
 
 func (m Message) DecodeAckApplied() (AckApplied, error) {

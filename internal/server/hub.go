@@ -7,8 +7,9 @@ import (
 )
 
 type dispatchMsg struct {
-	client *Client
-	op     message.Operation
+	client      *Client
+	op          message.Operation
+	IsDuplicate bool
 }
 
 type registerMsg struct {
@@ -84,12 +85,29 @@ func (h *Hub) handleUnregister(client *Client) {
 }
 
 func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
+	if dispatchMsg.IsDuplicate {
+		ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
+			ClientRevision: dispatchMsg.op.Revision,
+			ServerRevision: len(h.DocumentState.RevisionLog),
+		})
+		if err == nil {
+			select {
+			case dispatchMsg.client.send <- ackMsg:
+			default:
+			}
+		}
+		return
+	}
+
 	isValid, transformedOp, newRevision := h.DocumentState.ProcessOperation(dispatchMsg.op)
 	log.Printf("Operación procesada (rev cliente: %d). Válida: %v, Nueva Revisión: %d", dispatchMsg.op.Revision, isValid, newRevision)
 
 	// CONFIRMAR AL AUTOR (ACK)
 	// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
-	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{Revision: newRevision})
+	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
+		ClientRevision: dispatchMsg.op.Revision,
+		ServerRevision: newRevision,
+	})
 	if err == nil {
 		select {
 		case dispatchMsg.client.send <- ackMsg:

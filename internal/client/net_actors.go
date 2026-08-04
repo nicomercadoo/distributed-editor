@@ -106,7 +106,7 @@ func (s *Sender) Run(ctx context.Context) error {
 			retryCh = ticker.C
 
 		case ack := <-s.NetworkAcks:
-			if pendingOp != nil && pendingOp.Op().Revision == ack.Revision {
+			if pendingOp != nil && pendingOp.Op().Revision == ack.ClientRevision {
 				pendingOp.SetReceived(true)
 				if ticker != nil {
 					ticker.Stop()

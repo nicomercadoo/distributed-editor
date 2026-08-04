@@ -40,22 +40,14 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
-		ackRecv, err := message.NewMessage(message.MessageTypeAckReceived, message.AckReceived{Revision: op.Revision})
-		if err == nil {
-			// Bloqueamos hasta que haya espacio en el canal de envío.
-			// Esto garantiza la entrega del AckReceived. Si el canal está lleno,
-			// significa que el cliente está recibiendo muy lento (backpressure)
-			// y está bien que ReadPump se frene hasta que se libere espacio.
-			c.send <- ackRecv
-		}
-
 		if op.Revision <= c.lastRevisionRead {
-			log.Printf("Operación duplicada descartada de %s: revisión %d <= %d", c.conn.RemoteAddr().String(), op.Revision, c.lastRevisionRead)
+			log.Printf("Operación duplicada de %s: revisión %d <= %d", c.conn.RemoteAddr().String(), op.Revision, c.lastRevisionRead)
+			c.hub.Dispatch <- dispatchMsg{client: c, op: op, IsDuplicate: true}
 			continue
 		}
 		c.lastRevisionRead = op.Revision
 
-		c.hub.Dispatch <- dispatchMsg{client: c, op: op}
+		c.hub.Dispatch <- dispatchMsg{client: c, op: op, IsDuplicate: false}
 	}
 }
 

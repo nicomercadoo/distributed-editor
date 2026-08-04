@@ -132,7 +132,7 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
-	e.revision = ack.Revision
+	e.revision = ack.ServerRevision
 	e.inFlight = nil
 	if len(e.pending) > 0 {
 		nextOp := e.pending[0]
