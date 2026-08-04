@@ -24,7 +24,7 @@ func HandleConnection(hub *Hub) http.HandlerFunc {
 		client := &Client{
 			hub:              hub,
 			conn:             conn,
-			send:             make(chan message.Message, 256),
+			send:             make(chan message.Message, 100000),
 			lastRevisionRead: -1,
 		}
 
