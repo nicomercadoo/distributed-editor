@@ -185,9 +185,12 @@
                 deleteWasm(diff.pos);
             }
             
-            // Then Insert (one bulk operation)
+            // Then Insert (one by one)
             if (diff.inserted.length > 0) {
-                insertWasm(diff.pos, diff.inserted);
+                const chars = Array.from(diff.inserted);
+                for (let i = 0; i < chars.length; i++) {
+                    insertWasm(diff.pos + i, chars[i]);
+                }
             }
             
             lastKnownDoc = editor.value;
