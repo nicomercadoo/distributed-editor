@@ -17,6 +17,8 @@ while [[ "$1" == "-"* ]]; do
 done
 
 if [ $# -eq 0 ]; then
+    echo "Script orquestador (helper) para facilitar la ejecución de los binarios y herramientas del proyecto."
+    echo ""
     echo "Uso: ./run.sh [-q | -l] [comando1] [args1...] [comando2] [args2...] ..."
     echo ""
     echo "Opciones:"
@@ -25,15 +27,28 @@ if [ $# -eq 0 ]; then
     echo ""
     echo "Comandos disponibles:"
     echo "  toxiproxy   Inicia Toxiproxy en Docker."
-    echo "  server      Inicia el Servidor central."
+    echo "  server      Inicia el Servidor central. (Admite --help)"
     echo "  web         Inicia el Servidor para los Clientes Web."
-    echo "  repl        Inicia un Cliente REPL interactivo."
-    echo "  all         Equivale a: toxiproxy, server, web y repl. Sin logs."
+    echo "  repl        Inicia un Cliente REPL interactivo. (Admite --help)"
+    echo "  all         Equivale a: toxiproxy, server, web y repl."
+    echo "              (Admite el flag -c o --clear para enviárselo directamente al servidor)."
     echo ""
     echo "Ejemplo múltiple:"
-    echo "  ./run.sh server --port 8081 web -p 3002 web -p 3003"
+    echo "  ./run.sh server --port 8085 web toxiproxy repl"
     exit 0
 fi
+
+# Compila los binarios y el WebAssembly necesarios para la ejecución
+build() {
+    if [ $QUIET -eq 0 ]; then
+        echo "[+] Compilando binarios y WASM..."
+    fi
+    mkdir -p bin
+    
+    GOOS=js GOARCH=wasm go build -o web_ui/main.wasm wasm/main.go
+    go build -o bin/server cli/server/main.go
+    go build -o bin/client cli/client/main.go
+}
 
 # Guardamos los argumentos restantes en un arreglo para poder iterarlos y
 # extraer los parámetros específicos que corresponden a cada comando.
@@ -73,9 +88,8 @@ cleanup() {
         if [ -n "$PIDS" ]; then
             for pid in $PIDS; do
                 # IMPORTANTE: Usamos 'pkill -P' para matar primero a los procesos hijos.
-                # Esto es crucial porque 'go run' compila un binario temporal y lo ejecuta
-                # como un proceso hijo. Si solo matamos el padre, el servidor compilado
-                # queda corriendo de fondo (zombie) ocupando el puerto.
+                # (Originalmente crucial por el comportamiento de 'go run'. Aunque ahora usamos 
+                # binarios precompilados directamente, lo mantenemos como medida de seguridad).
                 pkill -P $pid 2>/dev/null
                 kill $pid 2>/dev/null
             done
@@ -96,12 +110,20 @@ run_background() {
         local log_file=$(mktemp /tmp/${name}_XXXXXX.log)
         echo "    [Log file: $log_file]"
         "$@" >"$log_file" 2>&1 &
+        PIDS="$PIDS $!"
+        
+        sleep 0.5
+        if [ -s "$log_file" ]; then
+            echo -e "    \033[90m--- Snippet del log ---\033[0m"
+            head -n 5 "$log_file" | sed 's/^/    \x1b[90m/' | sed 's/$/\x1b[0m/'
+            echo -e "    \033[90m-----------------------\033[0m"
+        fi
     elif [ $QUIET -eq 1 ]; then
         "$@" >/dev/null 2>&1 &
     else
         "$@" &
     fi
-    PIDS="$PIDS $!" # Concatenamos el PID del último comando ejecutado en background
+    if [ $LOG_OUTPUT -eq 0 ]; then PIDS="$PIDS $!"; fi
 }
 
 start_toxiproxy() {
@@ -129,6 +151,12 @@ start_toxiproxy() {
     sleep 1
     if [ $LOG_OUTPUT -eq 1 ]; then
         python3 load_toxics.py >>"$log_file" 2>&1
+        
+        if [ -s "$log_file" ]; then
+            echo -e "    \033[90m--- Snippet del log ---\033[0m"
+            head -n 5 "$log_file" | sed 's/^/    \x1b[90m/' | sed 's/$/\x1b[0m/'
+            echo -e "    \033[90m-----------------------\033[0m"
+        fi
     elif [ $QUIET -eq 1 ]; then
         python3 load_toxics.py >/dev/null 2>&1
     else
@@ -143,16 +171,16 @@ start_server() {
     shift # Consumimos 'is_last', dejando el resto de los argumentos intactos ("$@")
     echo "[+] Iniciando Servidor..."
     if [ $is_last -eq 0 ]; then
-        run_background server go run cli/server/main.go start "$@"
+        run_background server ./bin/server start "$@"
     else
         if [ $LOG_OUTPUT -eq 1 ]; then
             local log_file=$(mktemp /tmp/server_XXXXXX.log)
             echo "    [Log file: $log_file]"
-            go run cli/server/main.go start "$@" >"$log_file" 2>&1
+            ./bin/server start "$@" >"$log_file" 2>&1
         elif [ $QUIET -eq 1 ]; then
-            go run cli/server/main.go start "$@" >/dev/null 2>&1
+            ./bin/server start "$@" >/dev/null 2>&1
         else
-            go run cli/server/main.go start "$@"
+            ./bin/server start "$@"
         fi
     fi
 }
@@ -182,13 +210,15 @@ start_repl() {
     echo "[+] Iniciando REPL interactivo..."
     if [ $is_last -eq 0 ]; then
         # Si no es el último, lo forzamos al background igual, aunque el REPL interactivo no suele servir en bg
-        run_background repl go run cli/client/main.go start "$@"
+        run_background repl ./bin/client start "$@"
     else
-        go run cli/client/main.go start "$@"
+        ./bin/client start "$@"
     fi
 }
 
 # --- LÓGICA DE EJECUCIÓN (Procesando cada comando y sus argumentos) ---
+
+build
 
 NUM_TASKS=$((${#COMMAND_INDEXES[@]} - 1))
 
@@ -222,12 +252,21 @@ for (( t=0; t<NUM_TASKS; t++ )); do
             ;;
         all)
             echo "[+] Iniciando todos los componentes..."
+
+            # Buscamos si pasaron la flag -c para pasársela al servidor
+            SERVER_ARGS=()
+            for arg in "${cmd_args[@]}"; do
+                if [[ "$arg" == "-c" || "$arg" == "--clear" ]]; then
+                    SERVER_ARGS+=("-c")
+                fi
+            done
+
             # Forzamos temporalmente la flag LOG_OUTPUT para que toxiproxy, server y web
             # logueen en archivos y no ensucien la consola, dejando que el REPL sea el visible.
             ORIG_LOG=$LOG_OUTPUT
             LOG_OUTPUT=1
             start_toxiproxy
-            start_server 0
+            start_server 0 "${SERVER_ARGS[@]}"
             start_web 0
             LOG_OUTPUT=$ORIG_LOG
 

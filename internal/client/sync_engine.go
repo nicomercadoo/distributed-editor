@@ -94,7 +94,7 @@ func (e *SyncEngine) handleLocalOp(op message.Operation) {
 	docStr := string(e.document)
 	e.mu.Unlock()
 	select {
-	case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: %s", op.Op, docStr):
+	case e.Notifications <- fmt.Sprintf("Operación local %s aplicada. Documento: \"%s\"", op.Op, docStr):
 	default:
 	}
 }
@@ -110,7 +110,7 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 		e.mu.Unlock()
 
 		select {
-		case e.Notifications <- fmt.Sprintf("Operación propia confirmada vía sync. Documento: %s", docStr):
+		case e.Notifications <- fmt.Sprintf("Operación propia confirmada vía sync. Documento: \"%s\"", docStr):
 		default:
 		}
 		return
@@ -142,7 +142,7 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 
 	if isValid {
 		select {
-		case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: %s", op.Op, docStr):
+		case e.Notifications <- fmt.Sprintf("Operación remota %s aplicada. Documento: \"%s\"", op.Op, docStr):
 		default:
 		}
 	}

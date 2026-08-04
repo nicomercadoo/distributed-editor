@@ -52,7 +52,7 @@ var Handlers = map[string]Handler{
 		rev := r.Ctrl.GetRevision()
 		pending := r.Ctrl.GetPendingCount()
 		inflight := r.Ctrl.HasInFlight()
-		fmt.Printf("Documento: %q\nRevisión: %d\nOperaciones pendientes: %d\nEn vuelo: %v\n", doc, rev, pending, inflight)
+		fmt.Printf("Documento: \"%q\"\nRevisión: %d\nOperaciones pendientes: %d\nEn vuelo: %v\n", doc, rev, pending, inflight)
 		return nil
 	},
 
