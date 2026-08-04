@@ -18,7 +18,7 @@ type ConnectionManager struct {
 
 	// Data plane channels
 	Incoming chan<- message.ServerEvent
-	Outbound <-chan message.Operation
+	Outbound chan message.Operation
 
 	Notifications    chan<- string
 	revisionProvider func() int
@@ -29,7 +29,7 @@ type ConnectionManager struct {
 	ctx context.Context
 }
 
-func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEvent, outbound <-chan message.Operation, notifications chan<- string, getRevision func() int) *ConnectionManager {
+func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEvent, outbound chan message.Operation, notifications chan<- string, getRevision func() int) *ConnectionManager {
 	return &ConnectionManager{
 		Incoming:         incoming,
 		Outbound:         outbound,
@@ -62,6 +62,11 @@ func (m *ConnectionManager) Connect(uri string) error {
 	m.activeConnCtx, m.cancelConn = context.WithCancel(m.ctx)
 
 	networkAcks := make(chan message.AckApplied, 10)
+
+	// send the in-flight operation if it exists into the channel to be sent again
+	if m.inFlightOp != nil {
+	    m.Outbound <- m.inFlightOp.Op()
+	}
 
 	sender := NewSender(m.conn, m.Outbound, networkAcks, m.cancelConn, m)
 	listener := NewListener(m.conn, m.Incoming, networkAcks, m.cancelConn, m.Notifications, m)
