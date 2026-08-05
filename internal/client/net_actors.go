@@ -91,6 +91,7 @@ func (s *Sender) Run(ctx context.Context) error {
 			}
 			return nil
 
+		// Enviamos una nueva operación con reintentos automáticos
 		case op := <-s.Outbound:
 			pendingOp = NewInFlightOperation(op)
 			s.Manager.SetInFlightOp(pendingOp)
@@ -105,6 +106,7 @@ func (s *Sender) Run(ctx context.Context) error {
 			ticker = time.NewTicker(retryTimeout)
 			retryCh = ticker.C
 
+		// Al recibir el ack de la operación enviada, dejamos de reintentar
 		case ack := <-s.NetworkAcks:
 			if pendingOp != nil && pendingOp.Op().Revision == ack.ClientRevision {
 				pendingOp.SetReceived(true)
@@ -114,6 +116,7 @@ func (s *Sender) Run(ctx context.Context) error {
 				retryCh = nil
 			}
 
+		// Si pasa el tiempo y no recibimos respuesta, reintentamos
 		case <-retryCh:
 			if pendingOp != nil && !pendingOp.IsReceived() {
 				pendingOp.DecrementAttempt()
@@ -144,7 +147,7 @@ func (s *Sender) writeToSocket(op message.Operation, ctx context.Context) error 
 		case s.Manager.Notifications <- "Error: Mensaje no pudo ser serializado":
 		default:
 		}
-		return nil // We don't drop the connection for a serialization error
+		return nil // No tiramos la conexión por un error de serialización
 	}
 
 	if err := s.Conn.WriteJSON(msg); err != nil {
@@ -188,6 +191,7 @@ func (l *Listener) Run(ctx context.Context) error {
 		}
 
 		switch msg.Type {
+		// Si recibimos una operación, la enviamos al motor de sincronización
 		case message.MessageTypeOperation:
 			op, err := msg.DecodeOperation()
 			if err == nil {
@@ -203,6 +207,9 @@ func (l *Listener) Run(ctx context.Context) error {
 				}
 			}
 
+		// Si recibimos un ack, lo enviamos:
+		// - al sender para que deje de reintentar
+		// - al motor de sincronización para que avance a la siguiente operación pendiente
 		case message.MessageTypeAckApplied:
 			ackMsg, err := msg.DecodeAckApplied()
 			if err == nil {

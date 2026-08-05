@@ -17,13 +17,18 @@ type SyncEngine struct {
 	mu       sync.RWMutex
 	document Document
 	revision int
-	pending  []message.Operation
+	// Operaciones locales encoladas
+	pending []message.Operation
+	// Operación local enviada al servidor, aún no confirmada
 	inFlight *message.Operation
+	// Flag por si la operación inFlight se vuelve una No-op
+	inFlightInvalid bool
 
+	// Canales de entrada
 	LocalOps <-chan message.Operation
 	Incoming <-chan message.ServerEvent
-	Outbound chan<- message.Operation
-
+	// Canales de salida
+	Outbound      chan<- message.Operation
 	Notifications chan<- string
 }
 
@@ -41,6 +46,7 @@ func NewSyncEngine(
 	}
 }
 
+// applyOperation aplica una operación sobre un documento
 func applyOperation(doc Document, op message.Operation) Document {
 	switch op.Op {
 	case message.Insert:
@@ -76,19 +82,23 @@ func (e *SyncEngine) Run(ctx context.Context) {
 	}
 }
 
+// handleLocalOp maneja las operaciones locales que llegan por el canal localOps
 func (e *SyncEngine) handleLocalOp(op message.Operation) {
 	e.mu.Lock()
-	// Aplicar optimista
+	// Aplicamos la operación de manera optimista
 	e.document = applyOperation(e.document, op)
 
 	op.ID = uuid.New().String()
 	op.Revision = e.revision
 
+	// Si no hay operación en vuelo, enviamos esta
 	if e.inFlight == nil {
 		inFlightOp := op
 		e.inFlight = &inFlightOp
+		e.inFlightInvalid = false
 		e.Outbound <- *e.inFlight
 	} else {
+		// Si hay operación en vuelo, la encolamos
 		e.pending = append(e.pending, op)
 	}
 	docStr := string(e.document)
@@ -99,10 +109,11 @@ func (e *SyncEngine) handleLocalOp(op message.Operation) {
 	}
 }
 
+// handleRemoteOp maneja las operaciones remotas que llegan por el canal incoming
 func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 	e.mu.Lock()
 
-	// Chequeamos si es nuestra propia operacion que vuelve durante el sync
+	// Chequeamos si es nuestra propia operación que vuelve durante una reconexión
 	if e.inFlight != nil && e.inFlight.ID == op.ID {
 		e.revision++
 		e.advancePending()
@@ -117,23 +128,41 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 	}
 
 	isValid := true
+	// Si hay operación en vuelo, transformamos la operación remota contra la operación en vuelo
 	if e.inFlight != nil {
-		localOp := *e.inFlight
-		transformedLocalOp, _ := ot.Transform(localOp, op)
-		*e.inFlight = transformedLocalOp
-		op, isValid = ot.Transform(op, localOp)
+		// Solo transformamos si la operación en vuelo no es una No-op
+		if !e.inFlightInvalid {
+			localOp := *e.inFlight
+			transformedLocalOp, isValidLocal := ot.Transform(localOp, op)
+			if !isValidLocal {
+				e.inFlightInvalid = true // Si la operación en vuelo se volvió una No-op, la marcamos como inválida
+			}
+			*e.inFlight = transformedLocalOp
+			op, isValid = ot.Transform(op, localOp)
+		}
 	}
+
+	// Transformamos la operacion remota contra todas las operaciones pendientes
 	if isValid {
+		validPending := make([]message.Operation, 0, len(e.pending))
 		for i := range e.pending {
 			localOp := e.pending[i]
-			e.pending[i], _ = ot.Transform(localOp, op)
+			transformedLocalOp, isValidLocal := ot.Transform(localOp, op)
+			// Si la operación pendiente es válida, la mantenemos
+			if isValidLocal {
+				validPending = append(validPending, transformedLocalOp)
+			}
 			op, isValid = ot.Transform(op, localOp)
+			// Si la operación pendiente se volvió inválida, directamente la descartamos
 			if !isValid {
+				validPending = append(validPending, e.pending[i+1:]...)
 				break
 			}
 		}
+		e.pending = validPending
 	}
 	if isValid {
+		// Aplicamos operación remota al documento local
 		e.document = applyOperation(e.document, op)
 	}
 	e.revision++
@@ -148,8 +177,10 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 	}
 }
 
+// handleAckApplied maneja los acks que llegan por el canal incoming
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
+	// Chequeamos que el ack corresponda a la operación en vuelo
 	if e.inFlight == nil || e.inFlight.Revision != ack.ClientRevision {
 		e.mu.Unlock()
 		return
@@ -164,9 +195,11 @@ func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	}
 }
 
+// advancePending avanza a la siguiente operación pendiente
 // Asume que e.mu está bloqueado por el invocante
 func (e *SyncEngine) advancePending() {
 	e.inFlight = nil
+	e.inFlightInvalid = false
 	if len(e.pending) > 0 {
 		nextOp := e.pending[0]
 		e.pending = e.pending[1:]

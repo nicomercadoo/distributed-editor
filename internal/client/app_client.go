@@ -1,8 +1,7 @@
 package client
 
-
-// AppClient is the main client struct that manages synchronization with the server.
-// It implements the AppControler interface.
+// AppClient es el struct principal del cliente
+// Implementa la interfaz AppController
 type AppClient struct {
 	*SyncEngine
 	*ConnectionManager

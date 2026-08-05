@@ -47,10 +47,10 @@ func (h *Hub) Run() {
 	}
 }
 
+// handleRegister registra un nuevo cliente y le envía las operaciones faltantes para sincronizar su estado
 func (h *Hub) handleRegister(regMsg registerMsg) {
 	h.clients[regMsg.client] = true
 	log.Printf("Cliente registrado %s. Clientes activos: %d", regMsg.client.conn.RemoteAddr(), len(h.clients))
-	// Enviamos operaciones faltantes
 	if regMsg.revision >= 0 && regMsg.revision <= len(h.DocumentState.RevisionLog) {
 		opsMissing := len(h.DocumentState.RevisionLog) - regMsg.revision
 		if opsMissing > 0 {
@@ -75,6 +75,7 @@ func (h *Hub) handleRegister(regMsg registerMsg) {
 	}
 }
 
+// handleUnregister elimina al cliente del hub y cierra su canal de envío
 func (h *Hub) handleUnregister(client *Client) {
 	if _, ok := h.clients[client]; ok {
 		delete(h.clients, client)
@@ -83,7 +84,9 @@ func (h *Hub) handleUnregister(client *Client) {
 	}
 }
 
+// handleDispatch procesa una operación entrante: la transforma, la aplica al estado del documento y la retransmite a los demás clientes
 func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
+	// Si la operación ya fue procesada, le enviamos el ack al cliente y salimos
 	if h.DocumentState.IsDuplicate(dispatchMsg.op.ID) {
 		log.Printf("Operación duplicada detectada -> Tipo: %s, Char: %q, Pos: %d, ID: %s (rev cliente: %d). Host: %s", dispatchMsg.op.Op, dispatchMsg.op.Content, dispatchMsg.op.Position, dispatchMsg.op.ID, dispatchMsg.op.Revision, dispatchMsg.client.conn.RemoteAddr())
 		ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
@@ -103,7 +106,7 @@ func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
 	log.Printf("Operación procesada -> Tipo: %s, Char: %q, Pos: %d, Rev cliente: %d, ID: %s, Host: %s. Válida: %v, Nueva Revisión: %d", dispatchMsg.op.Op, dispatchMsg.op.Content, dispatchMsg.op.Position, dispatchMsg.op.Revision, dispatchMsg.op.ID, dispatchMsg.client.conn.RemoteAddr(), isValid, newRevision)
 
 	// CONFIRMAR AL AUTOR (ACK)
-	// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada).
+	// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada)
 	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
 		ClientRevision: dispatchMsg.op.Revision,
 		ServerRevision: newRevision,
@@ -121,7 +124,7 @@ func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
 	}
 
 	// BROADCAST A LOS DEMÁS
-	// Enviamos la operación TRANSFORMADA a todos menos al autor.
+	// Enviamos la operación TRANSFORMADA a todos menos al autor
 	outMsg, err := message.NewMessage(message.MessageTypeOperation, transformedOp)
 	if err == nil {
 		for client := range h.clients {

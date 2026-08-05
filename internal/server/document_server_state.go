@@ -40,7 +40,7 @@ func NewDocumentServerState(clear bool) *DocumentServerState {
 		}
 	}
 
-	// Populate processedIDs from the loaded log
+	// Llenamos el map processedIDs con las operaciones cargadas desde el historial
 	for _, op := range state.RevisionLog {
 		if op.ID != "" {
 			state.processedIDs[op.ID] = true
@@ -50,6 +50,7 @@ func NewDocumentServerState(clear bool) *DocumentServerState {
 	return state
 }
 
+// saveState guarda el estado del servidor en un archivo JSON
 func (state *DocumentServerState) saveState() {
 	data, err := json.MarshalIndent(state.RevisionLog, "", "  ")
 	if err != nil {
@@ -62,6 +63,7 @@ func (state *DocumentServerState) saveState() {
 	}
 }
 
+// IsDuplicate chequea si la operación con el ID dado ya fue procesada
 func (state *DocumentServerState) IsDuplicate(id string) bool {
 	if id == "" {
 		return false
@@ -70,14 +72,12 @@ func (state *DocumentServerState) IsDuplicate(id string) bool {
 	return exists
 }
 
-/*
-ProcessOperation toma una operación entrante, la transforma contra el historial reciente
-y la aplica al estado local del documento.
-Retorna:
-- isValid: si la operación sobrevivió a las transformaciones.
-- transformedOp: la operación resultante.
-- revision: el número de revisión actualizado del servidor.
-*/
+// ProcessOperation toma una operación entrante, la transforma contra el historial reciente
+// y la persiste en el historial del servidor
+// Retorna:
+// - isValid: si la operación sobrevivió a las transformaciones
+// - transformedOp: la operación resultante
+// - revision: el número de revisión actualizado del servidor
 func (state *DocumentServerState) ProcessOperation(op message.Operation) (bool, message.Operation, int) {
 	isValid := true
 	clientRevision := op.Revision
@@ -86,7 +86,7 @@ func (state *DocumentServerState) ProcessOperation(op message.Operation) (bool, 
 	for i := clientRevision; i < len(state.RevisionLog); i++ {
 		appliedOp := state.RevisionLog[i]
 		op, isValid = ot.Transform(op, appliedOp)
-		// Si se anula, cortamos el bucle.
+		// Si se anula, cortamos el bucle
 		if !isValid {
 			break
 		}

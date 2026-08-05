@@ -16,8 +16,9 @@ type ConnectionManager struct {
 	activeConnCtx context.Context
 	cancelConn    context.CancelFunc
 
-	// Data plane channels
+	// Canal de entrada para operaciones y acks
 	Incoming chan<- message.ServerEvent
+	// Canal de salida para operaciones
 	Outbound chan message.Operation
 
 	Notifications    chan<- string
@@ -25,7 +26,6 @@ type ConnectionManager struct {
 
 	inFlightOp *InFlightOperation
 
-	// parent context
 	ctx context.Context
 }
 
@@ -39,6 +39,7 @@ func NewConnectionManager(ctx context.Context, incoming chan<- message.ServerEve
 	}
 }
 
+// Connect intenta conectar al servidor en la URI especificada
 func (m *ConnectionManager) Connect(uri string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -47,6 +48,7 @@ func (m *ConnectionManager) Connect(uri string) error {
 		return errors.New("Ya hay una conexión activa.")
 	}
 
+	// Obtenemos la revisión actual y agregamos el parámetro a la URI
 	rev := 0
 	if m.revisionProvider != nil {
 		rev = m.revisionProvider()
@@ -63,11 +65,13 @@ func (m *ConnectionManager) Connect(uri string) error {
 
 	networkAcks := make(chan message.AckApplied, 10)
 
-	// send the in-flight operation if it exists into the channel to be sent again
+	// Enviamos la operación que quedó en vuelo si existe
+	// Esto solo ocurre si nos reconectamos
 	if m.inFlightOp != nil && !m.inFlightOp.IsReceived() {
-	    m.Outbound <- m.inFlightOp.Op()
+		m.Outbound <- m.inFlightOp.Op()
 	}
 
+	// Lanzamos los actores de red
 	sender := NewSender(m.conn, m.Outbound, networkAcks, m.cancelConn, m)
 	listener := NewListener(m.conn, m.Incoming, networkAcks, m.cancelConn, m.Notifications, m)
 
