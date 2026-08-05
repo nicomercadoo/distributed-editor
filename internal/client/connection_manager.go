@@ -64,7 +64,7 @@ func (m *ConnectionManager) Connect(uri string) error {
 	networkAcks := make(chan message.AckApplied, 10)
 
 	// send the in-flight operation if it exists into the channel to be sent again
-	if m.inFlightOp != nil {
+	if m.inFlightOp != nil && !m.inFlightOp.IsReceived() {
 	    m.Outbound <- m.inFlightOp.Op()
 	}
 

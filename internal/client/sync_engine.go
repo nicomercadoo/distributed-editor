@@ -150,6 +150,10 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
+	if e.inFlight == nil || e.inFlight.Revision != ack.ClientRevision {
+		e.mu.Unlock()
+		return
+	}
 	e.revision = ack.ServerRevision
 	e.advancePending()
 	rev := e.revision
