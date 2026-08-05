@@ -8,7 +8,7 @@ import (
 	"proyecto-final-redes/internal/protocol/message"
 )
 
-const serverHistoryFile = "server_history.json"
+const serverHistoryFile = ".server_history.json"
 
 type DocumentServerState struct {
 	RevisionLog  []message.Operation
