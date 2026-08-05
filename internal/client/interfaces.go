@@ -17,7 +17,7 @@ type DocumentInspector interface {
 	IsInFlightReceived() bool
 }
 
-// AppController es la fachada unificada que consumirá el REPL
+// AppController es la fachada unificada que consumirá el cliente (por ejemplo el REPL)
 type AppController interface {
 	ConnectionController
 	DocumentInspector
