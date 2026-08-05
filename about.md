@@ -47,7 +47,7 @@ Tanto el backend (servidor WebSocket) como la lógica del cliente están escrito
 ```mermaid
 graph TD
     subgraph Browser [Cliente Navegador]
-        UI[UI HTML/JS] <-->|insertWasm, updateState| WASM[WASM - Go Client]
+        UI[UI HTML/JS] <-->|insertWasm, updateState| WASM["Go Client(WASM)"]
     end
     
     subgraph CLIClient [Cliente Terminal]
