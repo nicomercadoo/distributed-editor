@@ -108,7 +108,7 @@ func (s *Sender) Run(ctx context.Context) error {
 
 		// Al recibir el ack de la operación enviada, dejamos de reintentar
 		case ack := <-s.NetworkAcks:
-			if pendingOp != nil && pendingOp.Op().Revision == ack.ClientRevision {
+			if pendingOp != nil && pendingOp.Op().ID == ack.OperationID {
 				pendingOp.SetReceived(true)
 				if ticker != nil {
 					ticker.Stop()

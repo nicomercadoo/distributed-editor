@@ -90,7 +90,7 @@ func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
 	if h.DocumentState.IsDuplicate(dispatchMsg.op.ID) {
 		log.Printf("Operación duplicada detectada -> Tipo: %s, Char: %q, Pos: %d, ID: %s (rev cliente: %d). Host: %s", dispatchMsg.op.Op, dispatchMsg.op.Content, dispatchMsg.op.Position, dispatchMsg.op.ID, dispatchMsg.op.Revision, dispatchMsg.client.conn.RemoteAddr())
 		ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
-			ClientRevision: dispatchMsg.op.Revision,
+			OperationID:    dispatchMsg.op.ID,
 			ServerRevision: len(h.DocumentState.RevisionLog),
 		})
 		if err == nil {
@@ -108,7 +108,7 @@ func (h *Hub) handleDispatch(dispatchMsg dispatchMsg) {
 	// CONFIRMAR AL AUTOR (ACK)
 	// Le avisamos al cliente su nuevo número de revisión (incluso si la op fue rechazada)
 	ackMsg, err := message.NewMessage(message.MessageTypeAckApplied, message.AckApplied{
-		ClientRevision: dispatchMsg.op.Revision,
+		OperationID:    dispatchMsg.op.ID,
 		ServerRevision: newRevision,
 	})
 	if err == nil {

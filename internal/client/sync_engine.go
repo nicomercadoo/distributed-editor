@@ -181,7 +181,7 @@ func (e *SyncEngine) handleRemoteOp(op message.Operation) {
 func (e *SyncEngine) handleAckApplied(ack message.AckApplied) {
 	e.mu.Lock()
 	// Chequeamos que el ack corresponda a la operación en vuelo
-	if e.inFlight == nil || e.inFlight.Revision != ack.ClientRevision {
+	if e.inFlight == nil || e.inFlight.ID != ack.OperationID {
 		e.mu.Unlock()
 		return
 	}
