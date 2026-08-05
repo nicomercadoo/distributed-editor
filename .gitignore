@@ -36,3 +36,5 @@ go.work.sum
 .client_history
 bin/
 server_history.json
+.server_history.json
+web_ui/main.wasm
