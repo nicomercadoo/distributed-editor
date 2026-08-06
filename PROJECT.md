@@ -461,3 +461,16 @@ La arquitectura de frontend difiere de una Single Page Application (SPA) tradici
 2. **Entrada de Usuario**: Cuando el usuario tipea en el `<textarea>`, un event listener en JS intercepta el evento, calcula un *diff* manual (posición y carácter exacto modificado comparado contra el estado anterior) y llama a la función WASM correspondiente para que aplique la mutación matemática del lado de Go.
 3. **Procesamiento y Red (Go)**: La instancia de WASM encola esas operaciones localmente (aplicándolas optimísticamente en su memoria) y se encarga de enviarlas por la conexión WebSocket abierta. En paralelo, ejecuta una Goroutine a modo de *Ticker loop* (60 veces por segundo).
 4. **Actualización Visual (JS)**: Si el Ticker detecta un cambio (ej. texto modificado por un usuario remoto tras pasar el conflicto OT, o un simple cambio en el estado de conexión), invoca de vuelta a un callback expuesto por JavaScript llamado `updateState`. Esta función en JS serializa el JSON y renderiza los datos actualizando la UI, con un cuidado minucioso en no sobreescribir la posición actual del cursor de tipeo del usuario.
+
+## Edicion offline
+
+La arquitectura actual permite a un cliente seguir editando el documento a pesar de perder la conexión con el servidor. Las operaciones realizadas por un cliente desconectado se aplicarán de forma optimista en su copia local pero no serán enviadas por la red, en su lugar serán encoladas como pendientes.
+
+Al recuperar la conexión con el servidor ocurre lo siguiente:
+
+1. El cliente envía la revisión en donde se quedó antes de desconectarse; si no había estado conectado antes, simplemente envía la revisión 0.
+2. El servidor lo registra y le envía las operaciones cuya revisión es mayor o igual a la revisión enviada.
+3. El cliente transforma esas operaciones y las aplica en su copia local.
+4. El cliente comienza a enviar las operaciones que encoló mientras editaba desconectado.
+
+Gracias a los números de revisión y a la lógica de OT, el servidor sabe como aplicar estas operaciones que quedaron “desactualizadas”.
