@@ -8,16 +8,40 @@ Este proyecto es un editor de texto colaborativo en tiempo real basado en **Oper
 
 El código está estructurado siguiendo las convenciones típicas de Go, separando responsabilidades:
 
+- `/bin/`: Contiene los ejecutables compilados del servidor y cliente.
 - `/cli/`: Contiene los puntos de entrada para los comandos de terminal (`client` y `server`) implementados con Cobra.
 - `/internal/`: Lógica central del sistema, que no debe ser expuesta como librería externa.
-  - `ot/`: Contiene el corazón matemático del sistema: el algoritmo de **Operational Transformation (OT)**.
+  - `ot/`: Contiene el corazón matemático del sistema: el algoritmo de Operational Transformation (OT).
   - `client/`: Manejo de la lógica del cliente (motor de sincronización `SyncEngine`, conexión de red, cliente de aplicación).
-  - `server/`: Manejo de las conexiones WebSocket (`hub`), estado de cada cliente (`client.go`) y el estado autoritativo del documento en el servidor (`document_server_state.go`).
+  - `server/`: Manejo de las conexiones WebSocket (`hub.go`), estado de cada cliente (`client.go`) y el estado autoritativo del documento en el servidor (`document_server_state.go`).
   - `protocol/`: Definición de los mensajes intercambiados (`Message`, `Operation`, `AckApplied`, etc.) y el formato JSON subyacente.
+- `/repl/`: Implementación del cliente interactivo de terminal (REPL) con autocompletado y manejo de comandos asíncronos mediante `readline`.
 - `/wasm/`: Código en Go diseñado exclusivamente para compilar a WebAssembly. Expone la lógica de sincronización de `internal/client` a JavaScript.
 - `/web_ui/`: Archivos estáticos del cliente web (`index.html`, `wasm_exec.js`, `main.wasm`).
-- `run.sh` y `load_toxics.py`: Scripts de orquestación para iniciar el sistema (servidor, clientes web/CLI) y configurar un entorno de red adverso (latencia, fallos) localmente.
+- `run.sh`, `load_toxics.py` y `toxiproxy.json`: Scripts y configuración de orquestación para iniciar el sistema (servidor, clientes web/CLI) y configurar un entorno de red adverso (latencia, fallos) localmente.
 
+```mermaid
+graph TD
+    Root["proyecto-final-redes"] --> CLI["cli/"]
+    Root --> Internal["internal/"]
+    Root --> Repl["repl/"]
+    Root --> Web["web_ui/"]
+    Root --> Wasm["wasm/"]
+    
+    CLI --> CLI_Server["server/main.go (Punto de entrada del servidor)"]
+    CLI --> CLI_Client["client/main.go (Punto de entrada del REPL)"]
+    
+    Internal --> OT["ot/ (Lógica de Transformación Operacional)"]
+    Internal --> ServerEngine["server/ (Manejo de clientes y WebSockets)"]
+    Internal --> ClientEngine["client/ (Motor de sincronización y red)"]
+    Internal --> Proto["protocol/ (Formatos de mensajes compartidos)"]
+    
+    Repl --> ReplEngine["(Lógica interactiva de terminal)"]
+    
+    Wasm --> WasmMain["main.go (Puente entre Go y JS)"]
+    
+    Web --> WebFiles["(Archivos HTML, JS, y WASM)"]
+```
 ---
 
 ## Tecnologías Utilizadas
@@ -28,7 +52,7 @@ Tanto el backend (servidor WebSocket) como la lógica del cliente están escrito
 
 ### 2. WebSockets (gorilla/websocket)
 - **Cómo se usa**: Provee la conexión persistente, bidireccional y de baja latencia necesaria para un editor en tiempo real. 
-- **Explicación Técnica**: A diferencia del HTTP tradicional que es "Request-Response", WebSockets mantiene un socket TCP abierto. Esto permite al servidor "empujar" (broadcast) los cambios de otros usuarios hacia el cliente en cuanto suceden.
+- **Explicación Técnica**: A diferencia del HTTP tradicional que es "Request-Response", WebSockets mantiene un socket TCP abierto. Esto permite al servidor enviar (broadcast) los cambios de otros usuarios hacia el cliente en cuanto suceden.
 
 ### 3. WebAssembly (WASM)
 - **Cómo se usa**: El cliente del navegador carga `main.wasm` (el código de Go compilado). La lógica compleja de OT y sincronización se ejecuta nativamente a gran velocidad en el navegador, exponiendo funciones al frontend (ej. `insertWasm`, `deleteWasm`, y un loop que inyecta estado a `updateState` de JS).
@@ -114,6 +138,13 @@ sequenceDiagram
     Note over C2: C2 recibe 'A' y ajusta localmente
     Note over C1: C1 recibe 'B' y ajusta localmente
 ```
+
+### 4. Flujo de Ejecución de la Interfaz Web (WASM)
+La arquitectura de frontend difiere de una Single Page Application (SPA) tradicional. Aquí, toda la carga pesada recae sobre Go compilado (WASM), delegando a JS puramente el manejo del DOM:
+1. **Inicialización**: El navegador (JS) carga el binario `main.wasm`. Go levanta internamente el `SyncEngine` y `ConnectionManager`, y expone funciones "bindings" globales a JavaScript (ej. `insertWasm`, `deleteWasm`, `connectWasm`).
+2. **Entrada de Usuario**: Cuando el usuario tipea en el `<textarea>`, un event listener en JS intercepta el evento, calcula un _diff_ manual (posición y carácter exacto modificado comparado contra el estado anterior) y llama a la función WASM correspondiente para que aplique la mutación matemática del lado de Go.
+3. **Procesamiento y Red (Go)**: La instancia de WASM encola esas operaciones localmente (aplicándolas optimísticamente en su memoria) y se encarga de enviarlas por la conexión WebSocket abierta. En paralelo, ejecuta una Goroutine a modo de *Ticker loop* (60 veces por segundo).
+4. **Actualización Visual (JS)**: Si el Ticker detecta un cambio (ej. texto modificado por un usuario remoto tras pasar el conflicto OT, o un simple cambio en el estado de conexión), invoca de vuelta a un callback expuesto por JavaScript llamado `updateState`. Esta función en JS serializa el JSON y renderiza los datos actualizando la UI, con un cuidado minucioso en no sobreescribir la posición actual del cursor de tipeo del usuario.
 
 ---
 
