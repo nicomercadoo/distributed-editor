@@ -318,16 +318,10 @@ El `SyncEngine` tiene la responsabilidad de realizar las operaciones de transfor
 ### 1. Flujo de datos a través de canales
 
 ```mermaid
----
-config:
-  layout: dagre
----
 flowchart TB
     subgraph Capa Ususario [Client]
         UI[Web UI / REPL]
-    %% end
         subgraph Capa Red [Net Actors]
-            %% CM[ConnectionManager]
             Sender[Sender]
             Listener[Listener]
         end
@@ -355,6 +349,7 @@ flowchart TB
     class e5 animate
     class e6 animate
 ```
+
 
 ### 2. Envío y recepción de operaciones
 

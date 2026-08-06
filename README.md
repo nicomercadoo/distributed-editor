@@ -2,6 +2,10 @@
 
 Implementación de un sistema de edición colaborativo utilizando **Operational Transformation (OT)**, con un servidor central y múltiples clientes soportados tanto desde la terminal (REPL) como desde una interfaz web, con la capacidad de simular problemas de red a través de Toxiproxy.
 
+### Developed by
+- [Nicolás Mercado](https://github.com/nicomercadoo)
+- [Santiago Sosa Moressi](https://github.com/santisosa9)
+
 ### Arquitectura e Implementación
 Para más información sobre la arquitectura e implementación del proyecto lee [PROJECT.md](./PROJECT.md)
 
