@@ -9,7 +9,7 @@ import (
 	"proyecto-final-redes/internal/protocol/message"
 )
 
-const retryTimeout = 10 * time.Second
+const retryTimeout = 3 * time.Second
 
 type InFlightOperation struct {
 	mu       sync.RWMutex
