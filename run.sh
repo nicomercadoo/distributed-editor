@@ -2,26 +2,13 @@
 
 cd "$(dirname "$0")"
 
-QUIET=0
-LOG_OUTPUT=0
-while [[ "$1" == "-"* ]]; do
-    if [[ "$1" == "-q" || "$1" == "--quiet" ]]; then
-        QUIET=1
-    elif [[ "$1" == "-l" || "$1" == "--logs" ]]; then
-        LOG_OUTPUT=1
-    else
-        echo "Opción desconocida: $1"
-        exit 1
-    fi
-    shift
-done
-
-if [ $# -eq 0 ]; then
+show_help() {
     echo "Script orquestador (helper) para facilitar la ejecución de los binarios y herramientas del proyecto."
     echo ""
-    echo "Uso: ./run.sh [-q | -l] [comando1] [args1...] [comando2] [args2...] ..."
+    echo "Uso: ./run.sh [-q | -l | -h] [comando1] [args1...] [comando2] [args2...] ..."
     echo ""
     echo "Opciones:"
+    echo "  -h, --help  Muestra este mensaje de ayuda."
     echo "  -q, --quiet Oculta los logs de los procesos en segundo plano."
     echo "  -l, --logs  Guarda los logs de los procesos en background en archivos temporales."
     echo ""
@@ -35,6 +22,29 @@ if [ $# -eq 0 ]; then
     echo ""
     echo "Ejemplo múltiple:"
     echo "  ./run.sh server --port 8085 web toxiproxy repl"
+}
+
+QUIET=0
+LOG_OUTPUT=0
+while [[ "$1" == "-"* ]]; do
+    if [[ "$1" == "-q" || "$1" == "--quiet" ]]; then
+        QUIET=1
+    elif [[ "$1" == "-l" || "$1" == "--logs" ]]; then
+        LOG_OUTPUT=1
+    elif [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        show_help
+        exit 0
+    else
+        echo "Opción desconocida: $1"
+        echo ""
+        show_help
+        exit 1
+    fi
+    shift
+done
+
+if [ $# -eq 0 ]; then
+    show_help
     exit 0
 fi
 
@@ -44,7 +54,7 @@ build() {
         echo "[+] Compilando binarios y WASM..."
     fi
     mkdir -p bin
-    
+
     GOOS=js GOARCH=wasm go build -o web_ui/main.wasm wasm/main.go
     go build -o bin/server cli/server/main.go
     go build -o bin/client cli/client/main.go
@@ -68,11 +78,15 @@ done
 
 if [ ${#COMMAND_INDEXES[@]} -eq 0 ]; then
     echo "Error: No se encontró ningún comando válido (toxiproxy, server, web, repl, all)."
+    echo ""
+    show_help
     exit 1
 fi
 
 if [ ${COMMAND_INDEXES[0]} -ne 0 ]; then
     echo "Error: Se pasaron argumentos antes de ningún comando. Asegurate de poner el nombre del comando primero."
+    echo ""
+    show_help
     exit 1
 fi
 
@@ -88,7 +102,7 @@ cleanup() {
         if [ -n "$PIDS" ]; then
             for pid in $PIDS; do
                 # IMPORTANTE: Usamos 'pkill -P' para matar primero a los procesos hijos.
-                # (Originalmente crucial por el comportamiento de 'go run'. Aunque ahora usamos 
+                # (Originalmente crucial por el comportamiento de 'go run'. Aunque ahora usamos
                 # binarios precompilados directamente, lo mantenemos como medida de seguridad).
                 pkill -P $pid 2>/dev/null
                 kill $pid 2>/dev/null
@@ -111,7 +125,7 @@ run_background() {
         echo "    [Log file: $log_file]"
         "$@" >"$log_file" 2>&1 &
         PIDS="$PIDS $!"
-        
+
         sleep 0.5
         if [ -s "$log_file" ]; then
             echo -e "    \033[90m--- Snippet del log ---\033[0m"
@@ -151,7 +165,7 @@ start_toxiproxy() {
     sleep 1
     if [ $LOG_OUTPUT -eq 1 ]; then
         python3 load_toxics.py >>"$log_file" 2>&1
-        
+
         if [ -s "$log_file" ]; then
             echo -e "    \033[90m--- Snippet del log ---\033[0m"
             head -n 5 "$log_file" | sed 's/^/    \x1b[90m/' | sed 's/$/\x1b[0m/'
